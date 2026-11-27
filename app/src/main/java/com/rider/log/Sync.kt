@@ -79,23 +79,46 @@ object Sync {
         val db = Db.get(ctx)
         var uploaded = 0
 
-        // 오늘과 어제 근무일 (새벽 6시 기준)
+        // 근무일별 기록 (새벽 6시 기준) — 첫 운행일부터 오늘까지. 바뀐 날만 실제로 업로드됨
         val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
-        for (back in 0..1) {
-            val cal = Calendar.getInstance()
-            cal.timeInMillis = System.currentTimeMillis() - 6 * 3600_000L
-            cal.add(Calendar.DAY_OF_MONTH, -back)
-            cal.set(Calendar.HOUR_OF_DAY, 6)
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
+        val monthFmt = SimpleDateFormat("yyyy-MM", Locale.KOREA)
+        val first = db.firstShiftStart() ?: System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = first - 6 * 3600_000L
+        cal.set(Calendar.HOUR_OF_DAY, 6)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val months = LinkedHashMap<String, StringBuilder>()
+        val now = System.currentTimeMillis()
+        while (cal.timeInMillis <= now) {
             val from = cal.timeInMillis
             val to = from + 24 * 3600_000L
+            cal.add(Calendar.DAY_OF_MONTH, 1)
             val o = JSONObject(db.dataJson(from, to))
             if (o.getJSONArray("events").length() == 0 && o.getJSONArray("shifts").length() == 0) continue
+            val day = dayFmt.format(Date(from))
+            // 정산표 한 줄
+            val row = dayRow(o, from, to)
+            months.getOrPut(monthFmt.format(Date(from))) { StringBuilder() }.append(day).append(',').append(row).append('\n')
+            // 이미 올린 지 이틀 넘은 날은 다시 만들지 않음 (배터리 절약)
+            val path = "days/$day.json"
+            val sent = JSONObject(p.getString("hashes", "{}") ?: "{}").has(path)
+            if (sent && from < now - 2 * 24 * 3600_000L) continue
             o.put("points", org.json.JSONArray(db.trackJson(from, to)))
-            if (put(ctx, repo, token, "days/" + dayFmt.format(Date(from)) + ".json", o.toString(1).toByteArray())) uploaded++
+            o.remove("stores") // 가게 목록은 stores.json 하나로
+            if (put(ctx, repo, token, path, o.toString(1).toByteArray())) uploaded++
         }
+
+        // 월별 정산표 (GitHub에서 표로 보임)
+        for ((m, rows) in months) {
+            val csv = "\uFEFF날짜,근무시간,완료건수,수입(원),평균단가(원),시급(원),주행(km),콜수,수락,거절,금액미입력\n$rows"
+            if (put(ctx, repo, token, "정산/$m.csv", csv.toByteArray(Charsets.UTF_8))) uploaded++
+        }
+
+        // 가게 목록
+        val stores = JSONObject(db.dataJson(0, 1)).getJSONArray("stores")
+        if (put(ctx, repo, token, "stores.json", stores.toString(1).toByteArray())) uploaded++
 
         // 화면 기록 (오늘, 어제 파일) — 압축해서
         val capFmt = SimpleDateFormat("yyyyMMdd", Locale.KOREA)
@@ -112,6 +135,52 @@ object Sync {
         if (put(ctx, repo, token, "cameras.json", db.camerasJson().toByteArray())) uploaded++
 
         return Pair(true, if (uploaded == 0) "변경 없음" else "${uploaded}개 파일 업로드")
+    }
+
+    /** 하루 정산 한 줄: 근무시간,완료,수입,평균단가,시급,km,콜수,수락,거절,금액미입력 */
+    private fun dayRow(o: JSONObject, from: Long, to: Long): String {
+        val now = System.currentTimeMillis()
+        var work = 0L
+        val shifts = o.getJSONArray("shifts")
+        for (i in 0 until shifts.length()) {
+            val sh = shifts.getJSONObject(i)
+            val a = maxOf(sh.getLong("start"), from)
+            val b = minOf(if (sh.isNull("end")) now else sh.getLong("end"), to)
+            if (b > a) work += b - a
+        }
+        var deliver = 0
+        var income = 0L
+        var paid = 0
+        var acc = 0
+        var rej = 0
+        val ev = o.getJSONArray("events")
+        for (i in 0 until ev.length()) {
+            val e = ev.getJSONObject(i)
+            when (e.getString("type")) {
+                "DELIVER" -> {
+                    deliver++
+                    if (!e.isNull("amount")) {
+                        income += e.getLong("amount"); paid++
+                    }
+                }
+                "ACCEPT" -> acc++
+                "REJECT" -> rej++
+            }
+        }
+        var meters = 0.0
+        val km = o.optJSONObject("km")
+        if (km != null) for (k in km.keys()) {
+            val t = k.toLong()
+            if (t in from until to) meters += km.getDouble(k)
+        }
+        val hours = work / 3600_000.0
+        val mins = work / 60000
+        val workStr = "${mins / 60}:${"%02d".format(mins % 60)}"
+        val avg = if (paid > 0) income / paid else 0L
+        val perHour = if (hours >= 0.1) (income / hours).toLong() else 0L
+        return listOf(
+            workStr, deliver, income, avg, perHour, "%.1f".format(meters / 1000), acc + rej, acc, rej, deliver - paid
+        ).joinToString(",")
     }
 
     private fun sha256(b: ByteArray): String =

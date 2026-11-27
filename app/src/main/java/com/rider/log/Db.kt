@@ -160,6 +160,12 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
         }
     }
 
+    fun firstShiftStart(): Long? {
+        readableDatabase.rawQuery("SELECT MIN(start_ts) FROM shifts", null).use { c ->
+            return if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+        }
+    }
+
     fun openShiftStart(): Long? {
         readableDatabase.rawQuery("SELECT start_ts FROM shifts WHERE end_ts IS NULL ORDER BY id DESC LIMIT 1", null).use { c ->
             return if (c.moveToFirst()) c.getLong(0) else null
