@@ -14,9 +14,10 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_menu_mylocation"
-        android:label="배달 기록"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Rider Log"
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name=".MainActivity"
@@ -38,7 +39,7 @@
         <service
             android:name=".ScreenReaderService"
             android:exported="true"
-            android:label="배달 기록 · 화면 읽기"
+            android:label="Rider Log · 화면 읽기"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

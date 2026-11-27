@@ -47,6 +47,10 @@ class TrackingService : Service(), LocationListener {
     companion object {
         const val ACTION_START = "com.rider.log.START"
         const val ACTION_STOP = "com.rider.log.STOP"
+        const val ACTION_OVERLAY = "com.rider.log.OVERLAY"
+
+        fun overlayEnabled(ctx: android.content.Context): Boolean =
+            ctx.getSharedPreferences("app", android.content.Context.MODE_PRIVATE).getBoolean("overlay", false)
         private const val CHANNEL = "tracking"
 
         @Volatile
@@ -68,12 +72,12 @@ class TrackingService : Service(), LocationListener {
     private var lastPointTs = 0L
 
     private val buttons = listOf(
-        Triple("수락", "ACCEPT", 0xFF2E7D32.toInt()),
-        Triple("거절", "REJECT", 0xFFC62828.toInt()),
-        Triple("가게 도착", "ARRIVE", 0xFF1565C0.toInt()),
-        Triple("픽업 완료", "PICKUP", 0xFF6A1B9A.toInt()),
-        Triple("배달 완료", "DELIVER", 0xFFEF6C00.toInt()),
-        Triple("↶ 되돌리기", "UNDO", 0xFF555555.toInt())
+        Triple("수락", "ACCEPT", 0xFF16A34A.toInt()),
+        Triple("거절", "REJECT", 0xFFDC2626.toInt()),
+        Triple("도착", "ARRIVE", 0xFF2563EB.toInt()),
+        Triple("픽업", "PICKUP", 0xFF7C3AED.toInt()),
+        Triple("완료", "DELIVER", 0xFFF2611D.toInt()),
+        Triple("↶ 취소", "UNDO", 0xFF374151.toInt())
     )
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -82,6 +86,17 @@ class TrackingService : Service(), LocationListener {
         if (intent?.action == ACTION_STOP) {
             finishShift()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_OVERLAY) {
+            // 설정에서 오버레이를 켜고 끌 때
+            if (running) {
+                if (overlayEnabled(this)) {
+                    if (bar == null) showBar()
+                } else {
+                    removeBar()
+                }
+            }
+            return START_STICKY
         }
         val open = db.openShiftId()
         // 시스템이 서비스를 재시작했는데 진행 중인 운행이 없으면 그냥 종료
@@ -99,7 +114,7 @@ class TrackingService : Service(), LocationListener {
         if (!running) {
             running = true
             startLocation()
-            showBar()
+            if (overlayEnabled(this)) showBar()
         }
         return START_STICKY
     }
@@ -125,6 +140,10 @@ class TrackingService : Service(), LocationListener {
         }
         pendingSkip?.invoke()
         removePanel()
+        removeBar()
+    }
+
+    private fun removeBar() {
         bar?.let {
             try {
                 wm?.removeView(it)
@@ -142,9 +161,9 @@ class TrackingService : Service(), LocationListener {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val n: Notification = Notification.Builder(this, CHANNEL)
-            .setContentTitle("운행 기록 중")
-            .setContentText("GPS 기록과 오버레이 버튼이 켜져 있어요")
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Rider Log · 운행 중")
+            .setContentText("이동 경로와 배달 기록을 저장하고 있어요")
+            .setSmallIcon(R.drawable.ic_stat_r)
             .setContentIntent(pi)
             .setOngoing(true)
             .build()
@@ -228,26 +247,26 @@ class TrackingService : Service(), LocationListener {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            background = rounded(0xCC202020.toInt(), 14)
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            background = rounded(0xD90B0F17.toInt(), 12)
         }
         val handle = TextView(this).apply {
             setTextColor(Color.WHITE)
-            textSize = 13f
+            textSize = 11f
             gravity = Gravity.CENTER
-            setPadding(0, dp(6), 0, dp(6))
+            setPadding(0, dp(4), 0, dp(4))
         }
-        root.addView(handle, LinearLayout.LayoutParams(dp(96), LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(handle, LinearLayout.LayoutParams(dp(68), LinearLayout.LayoutParams.WRAP_CONTENT))
 
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         for ((text, type, color) in buttons) {
             val b = TextView(this).apply {
                 this.text = text
                 setTextColor(Color.WHITE)
-                textSize = if (type == "UNDO") 13f else 15f
+                textSize = if (type == "UNDO") 11f else 12f
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
-                background = rounded(color, 10)
+                background = rounded(color, 8)
                 isClickable = true
                 setOnClickListener { v ->
                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -256,8 +275,8 @@ class TrackingService : Service(), LocationListener {
                     onTap(type)
                 }
             }
-            val lp = LinearLayout.LayoutParams(dp(96), dp(if (type == "UNDO") 36 else 50))
-            lp.topMargin = dp(4)
+            val lp = LinearLayout.LayoutParams(dp(68), dp(if (type == "UNDO") 28 else 36))
+            lp.topMargin = dp(3)
             box.addView(b, lp)
         }
         root.addView(box)
@@ -325,7 +344,7 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun updateHandle() {
-        handleView?.text = "≡ 완료 ${db.countEvents(shiftId, "DELIVER")}건"
+        handleView?.text = "≡ ${db.countEvents(shiftId, "DELIVER")}건"
     }
 
     private fun onTap(type: String) {

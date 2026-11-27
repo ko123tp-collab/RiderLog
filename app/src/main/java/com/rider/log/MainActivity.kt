@@ -4,6 +4,8 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
+import android.view.View
 import android.app.PendingIntent
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
@@ -46,8 +48,8 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF111827.toInt()
         web = WebView(this)
+        applyTheme(isDark())
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.webViewClient = WebViewClient()
@@ -159,6 +161,52 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---------------- 테마 ----------------
+
+    private fun themeMode(): String = getSharedPreferences("app", MODE_PRIVATE).getString("theme", "system") ?: "system"
+
+    private fun systemDark(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+    private fun isDark(): Boolean = when (themeMode()) {
+        "dark" -> true
+        "light" -> false
+        else -> systemDark()
+    }
+
+    /** 상태바·내비게이션바·배경색을 화면 테마에 맞춤 */
+    @Suppress("DEPRECATION")
+    private fun applyTheme(dark: Boolean) {
+        val bg = if (dark) 0xFF0B0D12.toInt() else 0xFFF4F5F7.toInt()
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        var flags = window.decorView.systemUiVisibility
+        flags = if (dark) {
+            flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+        } else {
+            flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
+        window.decorView.systemUiVisibility = flags
+        if (::web.isInitialized) web.setBackgroundColor(bg)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyTheme(isDark())
+        refreshWeb()
+    }
+
+    /** 배달 앱만 목록에 표시 (배민커넥트, 쿠팡이츠 배달 파트너) */
+    private fun isDeliveryApp(pkg: String, label: String): Boolean {
+        if (pkg == "com.woowahan.bros") return true
+        if (label.contains("배민커넥트") || label.contains("배달 파트너") || label.contains("배달파트너")) return true
+        val p = pkg.lowercase()
+        if (p.contains("coupang") && p != "com.coupang.mobile.eats" &&
+            listOf("courier", "partner", "rider", "delivery", "driver").any { p.contains(it) }
+        ) return true
+        return false
+    }
+
     override fun onResume() {
         super.onResume()
         refreshWeb()
@@ -175,7 +223,7 @@ class MainActivity : Activity() {
 
     /** 운행 시작: 오버레이 권한 → 위치/알림 권한 → 서비스 시작 */
     private fun requestStart() {
-        if (!Settings.canDrawOverlays(this)) {
+        if (TrackingService.overlayEnabled(this) && !Settings.canDrawOverlays(this)) {
             toast("'다른 앱 위에 표시'를 허용한 뒤 다시 운행 시작을 눌러 주세요")
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
@@ -306,6 +354,37 @@ class MainActivity : Activity() {
             }
         }
 
+        // ---------- 테마 · 오버레이 ----------
+
+        @JavascriptInterface
+        fun getTheme(): String = themeMode()
+
+        @JavascriptInterface
+        fun systemDark(): Boolean = this@MainActivity.systemDark()
+
+        @JavascriptInterface
+        fun setTheme(mode: String) {
+            getSharedPreferences("app", MODE_PRIVATE).edit().putString("theme", mode).apply()
+            runOnUiThread { applyTheme(isDark()) }
+        }
+
+        @JavascriptInterface
+        fun getOverlay(): Boolean = TrackingService.overlayEnabled(this@MainActivity)
+
+        @JavascriptInterface
+        fun setOverlay(on: Boolean) {
+            getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("overlay", on).apply()
+            if (on && !Settings.canDrawOverlays(this@MainActivity)) {
+                runOnUiThread {
+                    toast("'다른 앱 위에 표시'를 허용해 주세요")
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                }
+            }
+            if (TrackingService.running) {
+                startService(Intent(this@MainActivity, TrackingService::class.java).setAction(TrackingService.ACTION_OVERLAY))
+            }
+        }
+
         // ---------- 업데이트 ----------
 
         @JavascriptInterface
@@ -338,6 +417,7 @@ class MainActivity : Activity() {
                 } catch (e: Exception) {
                     ""
                 }
+                if (!isDeliveryApp(p, label)) continue
                 apps.put(JSONObject().put("pkg", p).put("label", label).put("on", p in selected))
             }
             val files = ScreenReaderService.captureDir(this@MainActivity).listFiles() ?: emptyArray<File>()
