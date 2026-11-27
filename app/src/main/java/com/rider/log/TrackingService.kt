@@ -36,6 +36,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * 운행 중에 돌아가는 서비스.
@@ -48,6 +50,10 @@ class TrackingService : Service(), LocationListener {
         const val ACTION_START = "com.rider.log.START"
         const val ACTION_STOP = "com.rider.log.STOP"
         const val ACTION_OVERLAY = "com.rider.log.OVERLAY"
+        const val ACTION_CAMERAS = "com.rider.log.CAMERAS"
+
+        fun camAlertEnabled(ctx: android.content.Context): Boolean =
+            ctx.getSharedPreferences("app", android.content.Context.MODE_PRIVATE).getBoolean("camAlert", true)
 
         fun overlayEnabled(ctx: android.content.Context): Boolean =
             ctx.getSharedPreferences("app", android.content.Context.MODE_PRIVATE).getBoolean("overlay", false)
@@ -87,6 +93,10 @@ class TrackingService : Service(), LocationListener {
             finishShift()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_CAMERAS) {
+            if (running) reloadCameras()
+            return START_STICKY
+        }
         if (intent?.action == ACTION_OVERLAY) {
             // 설정에서 오버레이를 켜고 끌 때
             if (running) {
@@ -113,6 +123,8 @@ class TrackingService : Service(), LocationListener {
         shiftId = open ?: db.startShift(System.currentTimeMillis())
         if (!running) {
             running = true
+            alerter = Alerter(this)
+            reloadCameras()
             startLocation()
             if (overlayEnabled(this)) showBar()
         }
@@ -120,12 +132,16 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onDestroy() {
+        alerter?.shutdown()
+        alerter = null
         cleanup()
         running = false
         super.onDestroy()
     }
 
     private fun finishShift() {
+        alerter?.shutdown()
+        alerter = null
         db.endShift(System.currentTimeMillis())
         cleanup()
         running = false
@@ -184,7 +200,7 @@ class TrackingService : Service(), LocationListener {
         } catch (e: Exception) {
         }
         try {
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000L, 0f, this, Looper.getMainLooper())
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, this, Looper.getMainLooper())
         } catch (e: Exception) {
         }
         try {
@@ -201,9 +217,109 @@ class TrackingService : Service(), LocationListener {
         ) return
         lastLoc = loc
         val now = System.currentTimeMillis()
-        if (now - lastPointTs >= 5000) {
+        if (now - lastPointTs >= 4000) {
             lastPointTs = now
-            db.addPoint(shiftId, now, loc.latitude, loc.longitude, if (loc.hasSpeed()) loc.speed else null)
+            db.addPoint(
+                shiftId, now, loc.latitude, loc.longitude,
+                if (loc.hasSpeed()) loc.speed else null,
+                if (loc.hasAccuracy()) loc.accuracy else null
+            )
+        }
+        if (loc.provider == LocationManager.GPS_PROVIDER) checkCameras(loc)
+    }
+
+    // ---------------- 후면 단속 카메라 알림 ----------------
+
+    private var alerter: Alerter? = null
+    private var cams: List<Db.Cam> = emptyList()
+
+    private class CamState {
+        var alerted = false
+        var minDist = Double.MAX_VALUE
+        var lastExit = 0L
+    }
+
+    private val camStates = HashMap<Long, CamState>()
+    private var headingLoc: Location? = null
+    private var heading: Float? = null
+    private var headingTs = 0L
+    private var lastSpeakTs = 0L
+    private var lastChimeTs = 0L
+
+    private fun reloadCameras() {
+        cams = db.cameras().filter { it.confirmed }
+        camStates.keys.retainAll(cams.map { it.id }.toSet())
+    }
+
+    /** 진행 방향: GPS가 주는 방향을 우선, 없으면 최근 이동으로 계산 */
+    private fun updateHeading(loc: Location) {
+        val now = System.currentTimeMillis()
+        if (loc.hasBearing() && loc.hasSpeed() && loc.speed >= 2.5f) {
+            heading = loc.bearing
+            headingTs = now
+            headingLoc = loc
+            return
+        }
+        val prev = headingLoc
+        if (prev == null) {
+            headingLoc = loc
+            return
+        }
+        if (prev.distanceTo(loc) >= 12f) {
+            heading = prev.bearingTo(loc)
+            headingTs = now
+            headingLoc = loc
+        }
+        if (now - headingTs > 15000) heading = null
+    }
+
+    private fun angleDiff(a: Float, b: Float): Float {
+        var d = abs(a - b) % 360f
+        if (d > 180f) d = 360f - d
+        return d
+    }
+
+    /**
+     * 진행 방향 앞쪽(좌우 ±35도) 300m 안, 이동선에서 옆으로 45m 이내에 카메라가 있으면 음성 안내.
+     * 카메라를 지나치거나(뒤쪽으로 넘어감) 멀어지면 '띠링'.
+     */
+    private fun checkCameras(loc: Location) {
+        if (cams.isEmpty() || !camAlertEnabled(this)) return
+        updateHeading(loc)
+        val h = heading
+        val moving = loc.hasSpeed() && loc.speed >= 2.0f || h != null
+        val now = System.currentTimeMillis()
+        for (c in cams) {
+            val target = Location("cam").apply { latitude = c.lat; longitude = c.lng }
+            val d = loc.distanceTo(target).toDouble()
+            val st = camStates.getOrPut(c.id) { CamState() }
+            if (!st.alerted) {
+                if (d > 300 || h == null || !moving || now - st.lastExit < 60000) continue
+                val diff = angleDiff(loc.bearingTo(target), h)
+                if (diff > 35f) continue
+                val rad = Math.toRadians(diff.toDouble())
+                val along = d * cos(rad)
+                val lateral = d * sin(rad)
+                if (along < 25 || lateral > 45) continue
+                st.alerted = true
+                st.minDist = d
+                if (now - lastSpeakTs > 8000) {
+                    lastSpeakTs = now
+                    alerter?.speak("전방에 후면단속 카메라가 있습니다.")
+                }
+            } else {
+                if (d < st.minDist) st.minDist = d
+                val behind = h != null && angleDiff(loc.bearingTo(target), h) > 100f
+                if ((behind && d > 20) || d > st.minDist + 80 || d > 400) {
+                    st.alerted = false
+                    st.lastExit = now
+                    st.minDist = Double.MAX_VALUE
+                    if (now - lastChimeTs > 3000) {
+                        lastChimeTs = now
+                        alerter?.chime()
+                    }
+                }
+            }
         }
     }
 

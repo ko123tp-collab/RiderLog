@@ -56,7 +56,9 @@ class MainActivity : Activity() {
         web.webChromeClient = WebChromeClient()
         web.addJavascriptInterface(Bridge(), "Android")
         setContentView(web)
-        web.loadUrl("file:///android_asset/index.html")
+        // 네이버 지도 인증이 https://ko123tp-collab.github.io 주소로 등록되어 있어서, 그 주소에서 연 화면으로 띄움
+        val html = assets.open("index.html").bufferedReader().use { it.readText() }
+        web.loadDataWithBaseURL("https://ko123tp-collab.github.io/", html, "text/html", "utf-8", null)
     }
 
     // ---------------- 자동 업데이트 ----------------
@@ -216,6 +218,15 @@ class MainActivity : Activity() {
         if (::web.isInitialized) web.evaluateJavascript("window.refresh && window.refresh()", null)
     }
 
+    private var preview: Alerter? = null
+
+    private fun previewAlerter(): Alerter = preview ?: Alerter(this).also { preview = it }
+
+    override fun onDestroy() {
+        preview?.shutdown()
+        super.onDestroy()
+    }
+
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
     private fun hasLocation(): Boolean =
@@ -352,6 +363,72 @@ class MainActivity : Activity() {
                 @Suppress("DEPRECATION")
                 startActivityForResult(i, REQ_EXPORT)
             }
+        }
+
+        // ---------- 후면 단속 카메라 ----------
+
+        private fun notifyCams() {
+            if (TrackingService.running) {
+                startService(Intent(this@MainActivity, TrackingService::class.java).setAction(TrackingService.ACTION_CAMERAS))
+            }
+        }
+
+        @JavascriptInterface
+        fun getCameras(): String = db.camerasJson()
+
+        @JavascriptInterface
+        fun addCamera(lat: String, lng: String, speed: String): String {
+            val id = db.addCamera("내가 추가한 카메라", lat.toDouble(), lng.toDouble(), speed.toIntOrNull() ?: 50)
+            notifyCams()
+            return id.toString()
+        }
+
+        @JavascriptInterface
+        fun updateCamera(id: String, json: String) {
+            db.updateCamera(id.toLong(), json)
+            notifyCams()
+        }
+
+        @JavascriptInterface
+        fun deleteCamera(id: String) {
+            db.deleteCamera(id.toLong())
+            notifyCams()
+        }
+
+        @JavascriptInterface
+        fun getCamAlert(): Boolean = TrackingService.camAlertEnabled(this@MainActivity)
+
+        @JavascriptInterface
+        fun setCamAlert(on: Boolean) {
+            getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("camAlert", on).apply()
+        }
+
+        @JavascriptInterface
+        fun testVoice() {
+            runOnUiThread { previewAlerter().speak("전방에 후면단속 카메라가 있습니다.") }
+        }
+
+        @JavascriptInterface
+        fun testChime() {
+            runOnUiThread { previewAlerter().chime() }
+        }
+
+        /** 마지막으로 알려진 내 위치 [위도, 경도] (없으면 빈 문자열) */
+        @SuppressLint("MissingPermission")
+        @JavascriptInterface
+        fun lastLocation(): String {
+            if (!hasLocation()) return ""
+            val lm = getSystemService(android.location.LocationManager::class.java) ?: return ""
+            var best: android.location.Location? = null
+            for (p in listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER)) {
+                try {
+                    val l = lm.getLastKnownLocation(p) ?: continue
+                    if (best == null || l.time > best.time) best = l
+                } catch (e: Exception) {
+                }
+            }
+            val b = best ?: return ""
+            return "[${b.latitude},${b.longitude}]"
         }
 
         // ---------- 테마 · 오버레이 ----------

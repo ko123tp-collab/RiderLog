@@ -159,6 +159,7 @@ function pct(x) { return x == null ? '-' : Math.round(x * 100) + '%'; }
 function hm(ms) { const m = Math.max(0, Math.round(ms / 60000)); const h = Math.floor(m / 60); return h ? h + '시간 ' + (m % 60) + '분' : (m % 60) + '분'; }
 function hmShort(ms) { const m = Math.round(ms / 60000); return Math.floor(m / 60) + ':' + pad(m % 60); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function kmf(x) { return x == null ? '-' : (x >= 100 ? Math.round(x) : x.toFixed(1)) + 'km'; }
 function stat(k, v, s) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
 
 function load(from, to) {
@@ -169,7 +170,7 @@ function load(from, to) {
 }
 function storeName(data, id) { return id != null && data.storeMap[id] ? data.storeMap[id].name : null; }
 function sliceEvents(data, from, to) {
-  return { shifts: data.shifts, stores: data.stores, storeMap: data.storeMap, events: data.events.filter(e => e.ts >= from && e.ts < to) };
+  return { shifts: data.shifts, stores: data.stores, storeMap: data.storeMap, km: data.km, events: data.events.filter(e => e.ts >= from && e.ts < to) };
 }
 
 /* ================= 핵심 계산 ================= */
@@ -210,9 +211,11 @@ function stats(data, from, to) {
       pend = null;
     }
   }
+  let km = 0;
+  if (data.km) for (const k in data.km) { const t = Number(k); if (t >= from && t < to) km += data.km[k] / 1000; }
   const offers = c.ACCEPT + c.REJECT, wh = work / H, ok = wh >= 0.1;
   return {
-    work, wh, c, offers, hours, hourWork, waits, income, paid,
+    work, wh, c, offers, hours, hourWork, waits, income, paid, km,
     unpaid: c.DELIVER - paid,
     acceptRate: offers ? c.ACCEPT / offers : null,
     rejectRate: offers ? c.REJECT / offers : null,
@@ -295,8 +298,9 @@ function renderHome() {
     stat('완료', s.c.DELIVER + '건', '시간당 ' + one(s.perHour) + '건') +
     stat('수입', won(s.income), s.unpaid > 0 ? '금액 미입력 ' + s.unpaid + '건' : '') +
     stat('근무 시간', hm(s.work)) +
-    stat('수락률', pct(s.acceptRate), '콜 ' + s.offers + '개 중 ' + s.c.ACCEPT + '개 수락') +
-    '</div></div>';
+    stat('주행 거리', kmf(s.km)) +
+    '</div><div class="muted" style="margin-top:10px">수락률 ' + pct(s.acceptRate) + ' · 콜 ' + s.offers + '개 중 ' + s.c.ACCEPT + '개 수락</div></div>';
+  h += camHomeCard();
   h += captureCard();
   return h;
 }
@@ -332,6 +336,88 @@ function captureCard() {
 }
 function toggleCap() { localStorage.setItem('capOpen', localStorage.getItem('capOpen') === '1' ? '0' : '1'); render(); }
 
+/* ================= 화면: 후면 단속 카메라 ================= */
+let camMap = null, camMarkers = {}, camSel = null, camAddMode = false;
+function camHomeCard() {
+  if (!A.getCameras) return '';
+  const cams = JSON.parse(A.getCameras());
+  const need = cams.filter(c => !c.confirmed).length;
+  const on = A.getCamAlert();
+  return '<div class="card" onclick="setTab(\'cams\')" style="cursor:pointer"><div class="row between"><div><b>후면 단속 카메라</b><div class="muted">' +
+    (on ? '알림 켜짐' : '알림 꺼짐') + ' · 확인된 ' + (cams.length - need) + '곳' + (need ? ' · <span class="warn">위치 확인 필요 ' + need + '곳</span>' : '') +
+    '</div></div><svg class="i" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 6 6 6-6 6"/></svg></div></div>';
+}
+function renderCams() {
+  const cams = JSON.parse(A.getCameras());
+  const need = cams.filter(c => !c.confirmed).length;
+  const on = A.getCamAlert();
+  let h = '<div class="card list" style="padding-top:4px;padding-bottom:4px">';
+  h += item('후면 카메라 음성 알림', '운행 중 진행 방향 앞 300m 안에 카메라가 있으면 "전방에 후면단속 카메라가 있습니다", 지나가면 \'띠링\'', '<label class="sw"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="A.setCamAlert(this.checked)"><span></span></label>');
+  h += item('미리 듣기', '', '<span class="row"><button class="btn" onclick="A.testVoice()">음성</button><button class="btn" onclick="A.testChime()">띠링</button></span>');
+  h += '</div>';
+  if (need) h += '<div class="card update"><b>위치 확인이 필요한 카메라 ' + need + '곳</b><div class="muted" style="margin-top:4px">드림라이더 캡처를 보고 위치를 대략 잡아 둔 거예요. <b style="color:#F59E0B">주황색</b> 카메라를 정확한 자리로 끌어다 놓으면 <b style="color:#E11D2E">빨간색</b>(확인됨)이 되고, 그때부터 알림이 울려요. 위치가 맞으면 눌러서 \'위치 맞음\'을 누르세요.</div></div>';
+  h += '<div class="card" style="padding:10px"><div class="row between" style="margin-bottom:8px"><button class="btn" onclick="camLocate()">내 위치</button><button id="camAddBtn" class="btn' + (camAddMode ? ' pri' : '') + '" onclick="camToggleAdd()">' + (camAddMode ? '지도에서 위치를 누르세요' : '+ 카메라 추가') + '</button></div>' +
+    '<div id="cammap" style="height:58vh;border-radius:12px;display:grid;place-items:center;color:var(--sub);font-size:13px">지도 불러오는 중…</div><div id="camsheet"></div></div>';
+  h += '<div class="card"><h2>목록</h2>';
+  for (const c of cams) {
+    h += '<div class="store" onclick="camFocus(' + c.id + ')"><div><div class="nm">' + esc(c.name) + '</div><div class="muted">제한 ' + (c.speed || '?') + 'km · ' + (c.confirmed ? '<span style="color:var(--ok)">확인됨</span>' : '<span class="warn">확인 필요</span>') + '</div></div><svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--faint)"><path d="m9 6 6 6-6 6"/></svg></div>';
+  }
+  h += '</div>';
+  setTimeout(drawCamMap, 0);
+  return h;
+}
+function drawCamMap() {
+  const box = document.getElementById('cammap');
+  if (!box) return;
+  loadNaver(() => {
+    const cams = JSON.parse(A.getCameras());
+    const center = camMap ? camMap.getCenter() : LL(37.4955, 127.0300);
+    const zoom = camMap ? camMap.getZoom() : 13;
+    camMap = new naver.maps.Map('cammap', { center, zoom, scaleControl: false, mapDataControl: false });
+    camMarkers = {};
+    for (const c of cams) {
+      const m = new naver.maps.Marker({ map: camMap, position: LL(c.lat, c.lng), icon: camIcon(c, camSel === c.id), draggable: true });
+      naver.maps.Event.addListener(m, 'click', () => camSelect(c.id));
+      naver.maps.Event.addListener(m, 'dragend', () => {
+        const p = m.getPosition();
+        A.updateCamera(String(c.id), JSON.stringify({ lat: p.lat(), lng: p.lng(), confirmed: true }));
+        camSel = c.id; render();
+      });
+      camMarkers[c.id] = m;
+    }
+    naver.maps.Event.addListener(camMap, 'click', e => {
+      if (!camAddMode) { camSel = null; document.getElementById('camsheet').innerHTML = ''; return; }
+      const id = A.addCamera(String(e.coord.lat()), String(e.coord.lng()), '50');
+      camAddMode = false; camSel = Number(id); render();
+    });
+    const loc = A.lastLocation ? A.lastLocation() : '';
+    if (loc) { const p = JSON.parse(loc); new naver.maps.Marker({ map: camMap, position: LL(p[0], p[1]), icon: dotIcon('#2563EB', 16), clickable: false }); }
+    if (camSel != null) camSelect(camSel);
+  }, why => mapFail(box, why));
+}
+function camLocate() {
+  const loc = A.lastLocation ? A.lastLocation() : '';
+  if (!loc || !camMap) return alert('내 위치를 아직 모르겠어요. 운행을 한 번 시작하면 위치가 잡혀요.');
+  const p = JSON.parse(loc); camMap.setCenter(LL(p[0], p[1])); camMap.setZoom(16);
+}
+function camToggleAdd() { camAddMode = !camAddMode; const b = document.getElementById('camAddBtn'); if (b) { b.className = 'btn' + (camAddMode ? ' pri' : ''); b.textContent = camAddMode ? '지도에서 위치를 누르세요' : '+ 카메라 추가'; } }
+function camFocus(id) { camSel = id; window.scrollTo({ top: 0, behavior: 'smooth' }); camSelect(id, true); }
+function camSelect(id, center) {
+  const c = JSON.parse(A.getCameras()).find(x => x.id === id);
+  if (!c || !camMap) return;
+  camSel = id;
+  Object.entries(camMarkers).forEach(([k, m]) => { const cc = JSON.parse(A.getCameras()).find(x => x.id === Number(k)); if (cc) m.setIcon(camIcon(cc, Number(k) === id)); });
+  if (center) { camMap.setCenter(LL(c.lat, c.lng)); camMap.setZoom(17); }
+  document.getElementById('camsheet').innerHTML = '<div style="padding:12px 2px 2px"><div class="row between"><b>' + esc(c.name) + '</b>' + (c.confirmed ? '<span class="badge b-hi">확인됨</span>' : '<span class="badge" style="background:#F59E0B22;color:#F59E0B">확인 필요</span>') + '</div>' +
+    '<div class="muted" style="margin:6px 0 10px">마커를 길게 눌러 끌면 위치를 옮길 수 있어요.</div>' +
+    '<div class="seg" style="margin-bottom:10px">' + [30, 40, 50, 60].map(v => '<button class="' + (c.speed === v ? 'on' : '') + '" onclick="camSet(' + id + ',{speed:' + v + '})">' + v + 'km</button>').join('') + '</div>' +
+    '<div class="row" style="flex-wrap:wrap">' + (c.confirmed ? '' : '<button class="btn pri" onclick="camSet(' + id + ',{confirmed:true})">위치 맞음</button>') +
+    '<button class="btn" onclick="camRename(' + id + ')">이름 변경</button><button class="btn" style="color:var(--bad)" onclick="camDel(' + id + ')">삭제</button></div></div>';
+}
+function camSet(id, o) { A.updateCamera(String(id), JSON.stringify(o)); render(); }
+function camRename(id) { const c = JSON.parse(A.getCameras()).find(x => x.id === id); const v = prompt('카메라 이름', c ? c.name : ''); if (v && v.trim()) camSet(id, { name: v.trim() }); }
+function camDel(id) { if (confirm('이 카메라를 삭제할까요?')) { A.deleteCamera(String(id)); camSel = null; render(); } }
+
 /* ================= 화면: 설정 ================= */
 function item(title, desc, right) {
   return '<div class="item"><div style="flex:1"><div class="tt">' + title + '</div>' + (desc ? '<div class="ds">' + desc + '</div>' : '') + '</div>' + (right || '') + '</div>';
@@ -346,6 +432,7 @@ function renderSettings() {
   h += '<div class="sec">운행</div><div class="card list" style="padding-top:4px;padding-bottom:4px">';
   h += item('오버레이 버튼', '배달 앱 위에 수락·도착·픽업·완료 버튼을 띄워요. 자동 인식을 쓰면 꺼 둬도 돼요.',
     '<label class="sw"><input type="checkbox" ' + (ov ? 'checked' : '') + ' onchange="A.setOverlay(this.checked)"><span></span></label>');
+  h += item('후면 단속 카메라', '음성 알림 설정, 카메라 위치 확인·추가', '<button class="btn" onclick="setTab(\'cams\')">열기</button>');
   h += item('배터리 최적화 제외', '삼성 폰은 이걸 해야 운행 중 기록이 끊기지 않아요.', '<button class="btn" onclick="A.openBatterySettings()">열기</button>');
   h += '</div>';
   h += '<div class="sec">데이터</div><div class="card list" style="padding-top:4px;padding-bottom:4px">';
@@ -383,7 +470,7 @@ function renderDay() {
   h += '<div class="card"><div class="grid">' +
     stat('근무', hmShort(s.work)) + stat('완료', s.c.DELIVER + '건') + stat('시간당', one(s.perHour) + '건') +
     stat('수입', won(s.income)) + stat('평균 단가', won(s.avgFare)) + stat('시급', won(s.incomePerHour)) +
-    stat('콜 수', s.offers + '개') + stat('수락률', pct(s.acceptRate)) + stat('거절률', pct(s.rejectRate)) +
+    stat('콜 수', s.offers + '개') + stat('수락률', pct(s.acceptRate)) + stat('주행', kmf(s.km)) +
     '</div>' + (s.unpaid > 0 ? '<div class="warn" style="margin-top:8px">금액이 안 적힌 배달이 ' + s.unpaid + '건 있어요. 아래 기록에서 배달 완료를 눌러 입력하세요.</div>' : '') +
     (s.avgWait != null ? '<div class="muted" style="margin-top:8px">평균 조리 대기 ' + one(s.avgWait / 60000) + '분 (가게 도착 → 픽업 완료)</div>' : '') +
     '</div>';
@@ -413,16 +500,37 @@ function tapEvent(id, type, amount) {
   }
 }
 
-/* 지도 (인터넷 필요) */
-function loadLeaflet(cb, fail) {
-  if (window.L) return cb();
-  const css = document.createElement('link');
-  css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-  document.head.appendChild(css);
-  const sc = document.createElement('script');
-  sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-  sc.onload = cb; sc.onerror = fail;
-  document.head.appendChild(sc);
+/* ================= 네이버 지도 ================= */
+const NCP_KEY = '96863tzj8d';
+let naverState = 'idle', naverWait = [];
+function loadNaver(cb, fail) {
+  if (window.naver && window.naver.maps && naverState === 'ok') return cb();
+  naverWait.push([cb, fail]);
+  if (naverState === 'loading') return;
+  naverState = 'loading';
+  const done = (ok, why) => { naverState = ok ? 'ok' : 'idle'; const w = naverWait; naverWait = []; w.forEach(x => ok ? x[0]() : x[1](why)); };
+  const tryLoad = (param, next) => {
+    window.navermap_authFailure = () => { if (next) { delete window.naver; next(); } else done(false, 'auth'); };
+    const sc = document.createElement('script');
+    sc.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?' + param + '=' + NCP_KEY;
+    sc.onload = () => setTimeout(() => { if (naverState === 'loading' && window.naver && naver.maps) done(true); }, 300);
+    sc.onerror = () => done(false, 'net');
+    document.head.appendChild(sc);
+  };
+  tryLoad('ncpKeyId', () => tryLoad('ncpClientId', null));
+}
+function mapFail(box, why) {
+  box.innerHTML = '<div class="muted" style="margin-top:8px">' + (why === 'auth' ? '네이버 지도 인증에 실패했어요. 네이버 클라우드에 Web 서비스 URL(https://ko123tp-collab.github.io)이 등록돼 있는지 확인해 주세요.' : '지도를 불러오지 못했어요 (인터넷 연결 확인)') + '</div>';
+}
+function LL(lat, lng) { return new naver.maps.LatLng(lat, lng); }
+function dotIcon(color, size) {
+  size = size || 14;
+  return { content: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + color + ';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)"></div>', anchor: new naver.maps.Point(size / 2 + 2, size / 2 + 2) };
+}
+function camIcon(c, sel) {
+  const col = c.confirmed ? '#E11D2E' : '#F59E0B';
+  const sz = sel ? 40 : 32;
+  return { content: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:#fff;border:' + (sel ? 5 : 4) + 'px solid ' + col + ';display:grid;place-items:center;font:800 ' + (sel ? 14 : 12) + 'px sans-serif;color:#111;box-shadow:0 2px 6px rgba(0,0,0,.3)">' + (c.speed || '?') + '</div>', anchor: new naver.maps.Point(sz / 2, sz / 2) };
 }
 function showMap() {
   const box = document.getElementById('mapbox');
@@ -431,22 +539,29 @@ function showMap() {
   const track = JSON.parse(A.getTrack(String(f), String(t)));
   const data = load(f, t);
   if (!track.length && !data.events.some(e => e.lat != null)) { box.innerHTML = '<div class="muted" style="margin-top:8px">GPS 기록이 없어요</div>'; return; }
-  loadLeaflet(() => {
+  loadNaver(() => {
     box.innerHTML = '<div id="map"></div>';
-    const map = L.map('map');
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap © CARTO' }).addTo(map);
-    const pts = track.map(p => [p[1], p[2]]);
-    let bounds = null;
-    if (pts.length) { const line = L.polyline(pts, { color: '#2563eb', weight: 3, opacity: .7 }).addTo(map); bounds = line.getBounds(); }
-    const color = { ACCEPT: '#2e7d32', REJECT: '#c62828', ARRIVE: '#1565c0', PICKUP: '#6a1b9a', DELIVER: '#ef6c00' };
-    for (const e of data.events) {
-      if (e.lat == null || e.type === 'ACCEPT' || e.type === 'REJECT') continue;
-      const m = L.circleMarker([e.lat, e.lng], { radius: 6, color: '#fff', weight: 2, fillColor: color[e.type], fillOpacity: 1 }).addTo(map);
-      m.bindPopup(clock(e.ts) + ' ' + LABEL[e.type] + (storeName(data, e.store) ? '<br>' + esc(storeName(data, e.store)) : ''));
-      bounds = bounds ? bounds.extend([e.lat, e.lng]) : L.latLngBounds([[e.lat, e.lng], [e.lat, e.lng]]);
+    const map = new naver.maps.Map('map', { zoom: 14, center: track.length ? LL(track[0][1], track[0][2]) : LL(37.497, 127.027), scaleControl: false, mapDataControl: false });
+    const bounds = new naver.maps.LatLngBounds();
+    let any = false;
+    if (track.length) {
+      const path = track.map(p => LL(p[1], p[2]));
+      new naver.maps.Polyline({ map, path, strokeColor: '#F2611D', strokeWeight: 4, strokeOpacity: 0.85, strokeLineCap: 'round', strokeLineJoin: 'round' });
+      path.forEach(p => bounds.extend(p)); any = true;
     }
-    if (bounds) map.fitBounds(bounds, { padding: [20, 20] });
-  }, () => { box.innerHTML = '<div class="muted" style="margin-top:8px">지도를 불러오지 못했어요 (인터넷 연결 확인)</div>'; });
+    const color = { ARRIVE: '#2563EB', PICKUP: '#7C3AED', DELIVER: '#F2611D' };
+    for (const e of data.events) {
+      if (e.lat == null || !color[e.type]) continue;
+      const m = new naver.maps.Marker({ map, position: LL(e.lat, e.lng), icon: dotIcon(color[e.type]) });
+      const info = new naver.maps.InfoWindow({ content: '<div style="padding:8px 10px;font-size:13px">' + clock(e.ts) + ' ' + LABEL[e.type] + (storeName(data, e.store) ? '<br><b>' + esc(storeName(data, e.store)) + '</b>' : '') + '</div>', borderWidth: 0, disableAnchor: false });
+      naver.maps.Event.addListener(m, 'click', () => info.getMap() ? info.close() : info.open(map, m));
+      bounds.extend(LL(e.lat, e.lng)); any = true;
+    }
+    for (const c of JSON.parse(A.getCameras ? A.getCameras() : '[]')) {
+      if (c.confirmed) new naver.maps.Marker({ map, position: LL(c.lat, c.lng), icon: camIcon(c) });
+    }
+    if (any) map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
+  }, why => mapFail(box, why));
 }
 
 /* ================= 화면: 기간 ================= */
@@ -473,16 +588,16 @@ function renderPeriod() {
   h += '<div class="card"><h2>' + dShort(a) + ' ~ ' + dShort(b) + '</h2><div class="grid">' +
     stat('근무일', worked.length + '일') + stat('총 근무', hmShort(s.work)) + stat('완료', s.c.DELIVER + '건') +
     stat('시간당', one(s.perHour) + '건') + stat('수입', won(s.income)) + stat('시급', won(s.incomePerHour)) +
-    stat('콜 수', s.offers + '개') + stat('수락률', pct(s.acceptRate)) + stat('평균 대기', s.avgWait == null ? '-' : one(s.avgWait / 60000) + '분') +
+    stat('콜 수', s.offers + '개') + stat('수락률', pct(s.acceptRate)) + stat('주행', kmf(s.km)) +
     '</div></div>';
   h += hourChart(s, '콜 많은 시간대 (근무 1시간당 콜)');
   if (!worked.length) return h + '<div class="card empty">이 기간에는 기록이 없어요</div>';
   const avgOph = worked.filter(x => x.s.offersPerHour != null).reduce((acc, x, _, arr) => acc + x.s.offersPerHour / arr.length, 0);
-  h += '<div class="card"><h2>일별</h2><table><tr><th>날짜</th><th>근무</th><th>완료</th><th>시간당</th><th>수락률</th><th>콜 지수</th></tr>';
+  h += '<div class="card"><h2>일별</h2><table><tr><th>날짜</th><th>근무</th><th>완료</th><th>시간당</th><th>km</th><th>콜 지수</th></tr>';
   for (const x of worked) {
     const idx = x.s.offersPerHour != null && avgOph > 0 ? Math.round(x.s.offersPerHour / avgOph * 100) : '-';
     h += '<tr class="click" onclick="goDay(\'' + key(x.date) + '\')"><td>' + dShort(x.date) + '</td><td>' + hmShort(x.s.work) + '</td><td>' + x.s.c.DELIVER +
-      '</td><td>' + one(x.s.perHour) + '</td><td>' + pct(x.s.acceptRate) + '</td><td>' + idx + '</td></tr>';
+      '</td><td>' + one(x.s.perHour) + '</td><td>' + (x.s.km ? Math.round(x.s.km) : '-') + '</td><td>' + idx + '</td></tr>';
   }
   h += '</table><div class="muted" style="margin-top:8px">여기서 콜 지수는 이 기간 평균을 100으로 본 값이에요. 날짜를 누르면 그날 상세로 가요.</div></div>';
   return h;
@@ -506,7 +621,7 @@ function renderPay() {
   const worked = r.days.filter(x => x.s.work > 0 || x.s.c.DELIVER > 0);
   h += '<div class="card"><div class="grid">' +
     stat('총 수입', won(s.income)) + stat('완료', s.c.DELIVER + '건') + stat('평균 단가', won(s.avgFare)) +
-    stat('근무', hmShort(s.work)) + stat('시급', won(s.incomePerHour)) + stat('일 평균', worked.length ? won(s.income / worked.length) : '-') +
+    stat('근무', hmShort(s.work)) + stat('시급', won(s.incomePerHour)) + stat('주행', kmf(s.km)) +
     '</div>' + (s.unpaid > 0 ? '<div class="warn" style="margin-top:8px">금액 미입력 ' + s.unpaid + '건 — 일별 화면에서 입력하면 정확해져요.</div>' : '') + '</div>';
   if (!worked.length) return h + '<div class="card empty">이 달에는 기록이 없어요</div>';
   h += '<div class="card"><table><tr><th>날짜</th><th>건수</th><th>수입</th><th>평균단가</th><th>근무</th><th>시급</th></tr>';
@@ -568,8 +683,8 @@ function render() {
   pill.className = 'pill' + (running ? ' on' : '');
   pill.innerHTML = '<span class="dot"></span>' + (running ? '운행 중' : '대기');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
-  document.getElementById('setbtn').classList.toggle('on', st.tab === 'settings');
-  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings }[st.tab];
+  document.getElementById('setbtn').classList.toggle('on', st.tab === 'settings' || st.tab === 'cams');
+  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings, cams: renderCams }[st.tab];
   try {
     document.getElementById('view').innerHTML = fn();
   } catch (e) {
@@ -577,6 +692,7 @@ function render() {
   }
 }
 window.refresh = function () {
+  if (st.tab === 'cams') return;
   if (st.tab === 'stores' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   render();
 };
@@ -635,7 +751,7 @@ function makeMock() {
     exportAll: () => alert('미리보기에서는 내보내기가 없어요'),
     openBatterySettings: () => alert('미리보기'),
     captureStatus: () => JSON.stringify({ enabled: true, on: true, count: 1284, bytes: 3456789, apps: [{ pkg: 'com.woowahan.bros', label: '배민커넥트', on: true }] }),
-    version: () => '3', getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
+    version: () => '3', getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
     setCaptureOn: () => {}, setCaptureApp: () => {}, openAccessibilitySettings: () => {}, openAppInfo: () => {}, exportCapture: () => {}, clearCapture: () => {}
   };
 }
