@@ -365,9 +365,30 @@ class MainActivity : Activity() {
             }
         }
 
+        // ---------- 서버(GitHub) 동기화 ----------
+
+        @JavascriptInterface
+        fun getSync(): String = Sync.statusJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun setSync(repo: String, token: String) {
+            Sync.setConfig(this@MainActivity, repo, token.ifBlank { null })
+        }
+
+        @JavascriptInterface
+        fun syncNow() {
+            Sync.runAsync(this@MainActivity) { ok, msg ->
+                runOnUiThread {
+                    toast(if (ok) "동기화 완료 · $msg" else "동기화 $msg")
+                    refreshWeb()
+                }
+            }
+        }
+
         // ---------- 후면 단속 카메라 ----------
 
         private fun notifyCams() {
+            Sync.runAsync(this@MainActivity)
             if (TrackingService.running) {
                 startService(Intent(this@MainActivity, TrackingService::class.java).setAction(TrackingService.ACTION_CAMERAS))
             }

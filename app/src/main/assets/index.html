@@ -48,7 +48,7 @@
   .stat .s { font-size: 11px; color: var(--faint); margin-top: 2px; }
   .big { width: 100%; border: 0; border-radius: 16px; padding: 19px; font-size: 18px; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--acc2), var(--acc)); letter-spacing: -0.3px; }
   .big.stop { background: var(--card2); color: var(--bad); border: 1px solid var(--line); }
-  .btn { border: 1px solid var(--line); background: var(--card2); border-radius: 11px; padding: 10px 13px; font-size: 14px; font-weight: 700; color: var(--ink); }
+  .btn { white-space: nowrap; border: 1px solid var(--line); background: var(--card2); border-radius: 11px; padding: 10px 13px; font-size: 14px; font-weight: 700; color: var(--ink); }
   .btn.pri { background: var(--acc); border-color: var(--acc); color: #fff; }
   .row { display: flex; gap: 8px; align-items: center; }
   .row.between { justify-content: space-between; }
@@ -435,6 +435,7 @@ function renderSettings() {
   h += item('후면 단속 카메라', '음성 알림 설정, 카메라 위치 확인·추가', '<button class="btn" onclick="setTab(\'cams\')">열기</button>');
   h += item('배터리 최적화 제외', '삼성 폰은 이걸 해야 운행 중 기록이 끊기지 않아요.', '<button class="btn" onclick="A.openBatterySettings()">열기</button>');
   h += '</div>';
+  h += syncCard();
   h += '<div class="sec">데이터</div><div class="card list" style="padding-top:4px;padding-bottom:4px">';
   h += item('전체 데이터 내보내기', '운행·배달 기록 전체를 파일로 저장해요. 백업이나 분석에 쓰세요.', '<button class="btn" onclick="A.exportAll()">저장</button>');
   h += item('근무일 기준', '새벽 6시 전 기록은 전날 근무로 계산해요.', '');
@@ -446,6 +447,23 @@ function renderSettings() {
     (u && u.available) ? '<button class="btn pri" onclick="A.installUpdate()">업데이트</button>' : '<button class="btn" onclick="st.update={checking:true};render();A.checkUpdate&&A.checkUpdate()">확인</button>');
   h += '</div>';
   return h;
+}
+function syncCard() {
+  if (!A.getSync) return '';
+  const y = JSON.parse(A.getSync());
+  const on = y.hasToken && y.repo;
+  let h = '<div class="sec">서버 자동 저장</div><div class="card">';
+  h += '<div class="row between"><b>GitHub 비공개 저장소</b>' + (on ? '<span class="badge ' + (y.ok ? 'b-hi' : y.last ? 'b-lo' : 'b-na') + '">' + (y.ok ? '연결됨' : y.last ? '오류' : '대기') + '</span>' : '<span class="badge b-na">설정 필요</span>') + '</div>';
+  h += '<div class="muted" style="margin:6px 0 10px">운행 중 15분마다, 운행 종료 때, 카메라를 고칠 때 자동으로 올라가요. 내보내기를 안 해도 Claude가 바로 볼 수 있어요.</div>';
+  h += '<input type="text" id="syRepo" placeholder="아이디/저장소" value="' + esc(y.repo || '') + '" style="margin-bottom:8px">';
+  h += '<input type="text" id="syTok" placeholder="' + (y.hasToken ? '토큰 저장됨 (바꿀 때만 입력)' : '토큰 붙여넣기 (github_pat_…)') + '" autocomplete="off" style="margin-bottom:10px;-webkit-text-security:disc">';
+  h += '<div class="row between"><span class="muted" style="font-size:12px">' + (y.last ? '마지막: ' + new Date(y.last).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · ' + esc(y.status) : '아직 동기화 안 함') + '</span>' +
+    '<span class="row"><button class="btn" onclick="saveSync()">저장</button><button class="btn pri" onclick="A.syncNow()">지금 올리기</button></span></div>';
+  return h + '</div>';
+}
+function saveSync() {
+  A.setSync(document.getElementById('syRepo').value, document.getElementById('syTok').value);
+  render();
 }
 function applyThemeClass() {
   const mode = A.getTheme ? A.getTheme() : 'system';
@@ -693,6 +711,7 @@ function render() {
 }
 window.refresh = function () {
   if (st.tab === 'cams') return;
+  if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'stores' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   render();
 };
@@ -751,7 +770,7 @@ function makeMock() {
     exportAll: () => alert('미리보기에서는 내보내기가 없어요'),
     openBatterySettings: () => alert('미리보기'),
     captureStatus: () => JSON.stringify({ enabled: true, on: true, count: 1284, bytes: 3456789, apps: [{ pkg: 'com.woowahan.bros', label: '배민커넥트', on: true }] }),
-    version: () => '3', getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
+    version: () => '3', getSync: () => JSON.stringify({ repo: 'ko123tp-collab/riderlog-data', hasToken: true, last: Date.now(), status: '3개 파일 업로드', ok: true }), setSync: () => {}, syncNow: () => {}, getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
     setCaptureOn: () => {}, setCaptureApp: () => {}, openAccessibilitySettings: () => {}, openAppInfo: () => {}, exportCapture: () => {}, clearCapture: () => {}
   };
 }

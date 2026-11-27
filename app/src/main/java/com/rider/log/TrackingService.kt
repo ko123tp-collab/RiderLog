@@ -126,12 +126,14 @@ class TrackingService : Service(), LocationListener {
             alerter = Alerter(this)
             reloadCameras()
             startLocation()
+            main.postDelayed(syncTick, 15 * 60_000L)
             if (overlayEnabled(this)) showBar()
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(syncTick)
         alerter?.shutdown()
         alerter = null
         cleanup()
@@ -139,7 +141,18 @@ class TrackingService : Service(), LocationListener {
         super.onDestroy()
     }
 
+    /** 운행 중 15분마다 서버(GitHub)로 자동 업로드 */
+    private val syncTick: Runnable = object : Runnable {
+        override fun run() {
+            if (!running) return
+            Sync.runAsync(this@TrackingService)
+            main.postDelayed(this, 15 * 60_000L)
+        }
+    }
+
     private fun finishShift() {
+        main.removeCallbacks(syncTick)
+        Sync.runAsync(this) // 운행 종료 시 마지막 업로드
         alerter?.shutdown()
         alerter = null
         db.endShift(System.currentTimeMillis())
