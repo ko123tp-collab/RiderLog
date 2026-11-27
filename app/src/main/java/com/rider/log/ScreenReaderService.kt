@@ -3,6 +3,8 @@ package com.rider.log
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
@@ -48,9 +50,22 @@ class ScreenReaderService : AccessibilityService() {
         }
     }
 
-    private var lastTs = 0L
-    private var lastSig = 0
     private val dayFmt = SimpleDateFormat("yyyyMMdd", Locale.KOREA)
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** 화면을 읽은 마지막 시각 (0.5초 간격 제한용) */
+    private var lastWalkTs = 0L
+    private var lastSaveTs = 0L
+    private var lastExactSig = 0
+    private var lastNormSig = 0
+
+    /** 0.5초 안에 또 바뀌면 바로 읽지 않고, 0.5초가 지난 시점에 마지막 화면을 한 번 더 읽음 */
+    private var pendingPkg: String? = null
+    private val trailing = Runnable {
+        val p = pendingPkg
+        pendingPkg = null
+        if (p != null) snapshot(p, "change")
+    }
 
     override fun onInterrupt() {}
 
@@ -69,32 +84,67 @@ class ScreenReaderService : AccessibilityService() {
         if (pkg !in selected) return
 
         val now = System.currentTimeMillis()
-
-        if (ev.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            val texts = JSONArray()
-            for (t in ev.text) if (t != null) texts.put(redact(t.toString()))
-            write(JSONObject().put("ts", now).put("pkg", pkg).put("kind", "noti").put("text", texts))
-            return
+        when (ev.eventType) {
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                val texts = JSONArray()
+                for (t in ev.text) if (t != null) texts.put(redact(t.toString()))
+                write(JSONObject().put("ts", now).put("pkg", pkg).put("kind", "noti").put("text", texts))
+            }
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                // 사용자가 배민에서 누른 버튼 (수락, 가게 도착, 픽업 완료 등) — 가장 확실한 신호
+                val texts = JSONArray()
+                for (t in ev.text) if (t != null) texts.put(redact(t.toString()))
+                val o = JSONObject().put("ts", now).put("pkg", pkg).put("kind", "click").put("text", texts)
+                ev.contentDescription?.let { o.put("cd", redact(it.toString())) }
+                try {
+                    ev.source?.viewIdResourceName?.let { o.put("id", it.substringAfter(":id/")) }
+                } catch (e: Exception) {
+                }
+                write(o)
+                scheduleOrSnapshot(pkg, now) // 누른 직후 바뀐 화면도 잡기
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                handler.removeCallbacks(trailing)
+                pendingPkg = null
+                snapshot(pkg, "window")
+            }
+            else -> scheduleOrSnapshot(pkg, now) // 내용 변경, 스크롤
         }
+    }
 
-        val isState = ev.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (!isState && now - lastTs < 2500) return
+    private fun scheduleOrSnapshot(pkg: String, now: Long) {
+        val since = now - lastWalkTs
+        if (since >= 500) {
+            handler.removeCallbacks(trailing)
+            pendingPkg = null
+            snapshot(pkg, "change")
+        } else {
+            pendingPkg = pkg
+            handler.removeCallbacks(trailing)
+            handler.postDelayed(trailing, 500 - since)
+        }
+    }
 
+    private fun snapshot(pkg: String, kind: String) {
+        val now = System.currentTimeMillis()
+        lastWalkTs = now
         val root = findRoot(pkg) ?: return
         val nodes = JSONArray()
         val sig = StringBuilder()
         walk(root, 0, nodes, sig)
-        // 숫자만 바뀐 화면(타이머 등)은 같은 화면으로 보고 중복 저장 안 함
-        val h = sig.toString().replace(Regex("\\d"), "#").hashCode()
-        if (h == lastSig) return
-        lastSig = h
-        lastTs = now
+        val exact = sig.toString().hashCode()
+        val norm = sig.toString().replace(Regex("\\d"), "#").hashCode()
+        if (exact == lastExactSig) return // 완전히 같은 화면
+        // 숫자만 바뀐 경우(타이머 등)는 5초에 한 번만 저장
+        if (norm == lastNormSig && now - lastSaveTs < 5000) return
+        lastExactSig = exact
+        lastNormSig = norm
+        lastSaveTs = now
         write(
             JSONObject()
                 .put("ts", now)
                 .put("pkg", pkg)
-                .put("kind", if (isState) "window" else "change")
-                .put("cls", ev.className?.toString() ?: "")
+                .put("kind", kind)
                 .put("nodes", nodes)
         )
     }
