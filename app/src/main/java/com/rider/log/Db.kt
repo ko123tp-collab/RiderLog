@@ -12,7 +12,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** 모든 기록은 폰 안의 SQLite 파일 하나에 저장된다. */
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", null, 3) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", null, 4) {
 
     companion object {
         @Volatile
@@ -37,7 +37,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE shifts(id INTEGER PRIMARY KEY AUTOINCREMENT, start_ts INTEGER NOT NULL, end_ts INTEGER)")
         db.execSQL("CREATE TABLE stores(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL)")
-        db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, lat REAL, lng REAL, store_id INTEGER, amount INTEGER, note TEXT, source TEXT)")
+        db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, lat REAL, lng REAL, store_id INTEGER, amount INTEGER, note TEXT, source TEXT, addr TEXT)")
         db.execSQL("CREATE TABLE points(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL, speed REAL, acc REAL)")
         db.execSQL("CREATE INDEX idx_events_ts ON events(ts)")
         db.execSQL("CREATE INDEX idx_points_ts ON points(ts)")
@@ -52,6 +52,9 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE events ADD COLUMN note TEXT")
             db.execSQL("ALTER TABLE events ADD COLUMN source TEXT")
+        }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE events ADD COLUMN addr TEXT")
         }
     }
 
@@ -218,8 +221,19 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
         }
     }
 
-    fun addAutoEvent(shift: Long, ts: Long, type: String, lat: Double?, lng: Double?, storeId: Long?, amount: Int?, note: String?): Long {
+    /** 고객 전달지 주소는 7일 지나면 지움 (오배달 확인용으로만 잠시 보관) */
+    fun purgeDropAddresses() {
         val cv = ContentValues()
+        cv.putNull("addr")
+        writableDatabase.update(
+            "events", cv, "addr IS NOT NULL AND type IN ('OFFER','ACCEPT','DELIVER') AND ts < ?",
+            arrayOf((System.currentTimeMillis() - 7 * 24 * 3600_000L).toString())
+        )
+    }
+
+    fun addAutoEvent(shift: Long, ts: Long, type: String, lat: Double?, lng: Double?, storeId: Long?, amount: Int?, note: String?, addr: String? = null): Long {
+        val cv = ContentValues()
+        if (addr != null) cv.put("addr", addr)
         cv.put("shift_id", shift)
         cv.put("ts", ts)
         cv.put("type", type)
@@ -361,7 +375,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
     private fun eventsJson(from: Long, to: Long): JSONArray {
         val arr = JSONArray()
         readableDatabase.rawQuery(
-            "SELECT id, shift_id, ts, type, lat, lng, store_id, amount, note, source FROM events WHERE ts >= ? AND ts < ? ORDER BY ts, id",
+            "SELECT id, shift_id, ts, type, lat, lng, store_id, amount, note, source, addr FROM events WHERE ts >= ? AND ts < ? ORDER BY ts, id",
             arrayOf(from.toString(), to.toString())
         ).use { c ->
             while (c.moveToNext()) {
@@ -376,6 +390,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
                 j.put("amount", if (c.isNull(7)) JSONObject.NULL else c.getInt(7))
                 j.put("note", if (c.isNull(8)) JSONObject.NULL else c.getString(8))
                 j.put("src", if (c.isNull(9)) "button" else c.getString(9))
+                j.put("addr", if (c.isNull(10)) JSONObject.NULL else c.getString(10))
                 arr.put(j)
             }
         }

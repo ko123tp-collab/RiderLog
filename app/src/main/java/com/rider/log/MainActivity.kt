@@ -50,6 +50,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         web = WebView(this)
         applyTheme(isDark())
+        Thread { try { db.purgeDropAddresses() } catch (e: Exception) {} }.start()
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.webViewClient = WebViewClient()

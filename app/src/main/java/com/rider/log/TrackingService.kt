@@ -127,6 +127,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
         if (!running) {
             running = true
             instance = this
+            db.purgeDropAddresses()
             alerter = Alerter(this)
             reloadCameras()
             startLocation()
@@ -249,7 +250,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
 
     // ---------------- 배민 화면 자동 인식 결과 기록 ----------------
 
-    override fun autoEvent(type: String, ts: Long, store: String?, amount: Int?, note: String?) {
+    override fun autoEvent(type: String, ts: Long, store: String?, amount: Int?, note: String?, addr: String?) {
         main.post {
             if (!running) return@post
             // 오버레이 버튼으로 이미 누른 기록이 있으면 중복 저장 안 함
@@ -264,7 +265,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
                 }
             }
             val n = if (type == "OFFER" || type == "ACCEPT" || type == "REJECT") listOfNotNull(store, note).joinToString(" · ").ifEmpty { null } else note
-            db.addAutoEvent(shiftId, ts, type, loc?.latitude, loc?.longitude, storeId, amount, n)
+            db.addAutoEvent(shiftId, ts, type, loc?.latitude, loc?.longitude, storeId, amount, n, addr)
             updateHandle()
         }
     }

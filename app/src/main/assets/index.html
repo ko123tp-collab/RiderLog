@@ -141,7 +141,7 @@ const LABEL = { OFFER: '콜', ACCEPT: '수락', REJECT: '거절', ARRIVE: '가�
 const HOUR_ORDER = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5];
 const A = window.Android || makeMock();
 
-const st = { tab: 'home', day: workDate(Date.now()), mode: 'week', from: null, to: null, month: null, storeQ: '' };
+const st = { dayView: 'trips', trip: null, tab: 'home', day: workDate(Date.now()), mode: 'week', from: null, to: null, month: null, storeQ: '' };
 
 /* ================= 유틸 ================= */
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -477,6 +477,46 @@ function setThemeMode(m) { if (A.setTheme) A.setTheme(m); applyThemeClass(); ren
 function startShift() { A.startShift(); setTimeout(render, 900); }
 function endShift() { if (confirm('운행을 종료할까요?')) { A.endShift(); setTimeout(render, 700); } }
 
+/* ================= 배달 건별 묶기 ================= */
+function buildTrips(data) {
+  const trips = [], open = [];
+  const code = e => (e.note && /^[A-Z0-9]{4}$/.test(e.note)) ? e.note : null;
+  const nameOf = e => storeName(data, e.store) || ((e.type === 'ACCEPT' || e.type === 'OFFER') && e.note ? String(e.note).split(' · ')[0] : null);
+  let lastOffer = null;
+  for (const e of data.events) {
+    if (e.type === 'OFFER') { lastOffer = e; continue; }
+    if (e.type === 'REJECT') { lastOffer = null; continue; }
+    if (e.type === 'ACCEPT') {
+      const off = lastOffer && e.ts - lastOffer.ts < 90000 ? lastOffer : null;
+      const t = { accept: e, offer: off, store: nameOf(e) || (off ? nameOf(off) : null), code: null };
+      trips.push(t); open.push(t); lastOffer = null; continue;
+    }
+    if (['ARRIVE', 'READY', 'PICKUP', 'DELIVER'].indexOf(e.type) < 0) continue;
+    const k = e.type.toLowerCase(), c = code(e), nm = nameOf(e);
+    let t = (c && open.find(x => x.code === c)) || (nm && open.find(x => !x[k] && x.store === nm && (!x.code || !c))) || open.find(x => !x[k] && (!x.code || !c));
+    if (!t) { t = { store: nm, code: null }; trips.push(t); open.push(t); }
+    t[k] = e; if (c) t.code = c; if (!t.store && nm) t.store = nm;
+    if (e.type === 'DELIVER') open.splice(open.indexOf(t), 1);
+  }
+  trips.forEach((t, i) => {
+    t.no = i + 1;
+    t.start = (t.accept || t.arrive || t.pickup || t.deliver).ts;
+    t.end = (t.deliver || t.pickup || t.arrive || t.accept).ts;
+    t.fare = t.deliver && t.deliver.amount != null ? t.deliver.amount : (t.offer ? t.offer.amount : null);
+    t.pickAddr = (t.arrive && t.arrive.addr) || (t.pickup && t.pickup.addr) || null;
+    t.dropAddr = (t.deliver && t.deliver.addr) || (t.accept && t.accept.addr) || (t.offer && t.offer.addr) || null;
+  });
+  return trips;
+}
+function hav(a, b, c, d) { const R = 6371000, r = Math.PI / 180, x = Math.sin((c - a) * r / 2), y = Math.sin((d - b) * r / 2); return 2 * R * Math.asin(Math.sqrt(x * x + Math.cos(a * r) * Math.cos(c * r) * y * y)); }
+function pathKm(track, from, to) {
+  let m = 0, last = null;
+  for (const p of track) { if (p[0] < from || p[0] > to) continue; if (!last) { last = p; continue; } const d = hav(last[1], last[2], p[1], p[2]); if (d >= 20 && d < 2000) { m += d; last = p; } }
+  return m / 1000;
+}
+function mins(ms) { if (ms == null || ms < 0) return '-'; const s = Math.round(ms / 1000); return s < 60 ? s + '초' : Math.floor(s / 60) + '분' + (s % 60 ? ' ' + (s % 60) + '초' : ''); }
+function clockS(ts) { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+
 /* ================= 화면: 일별 ================= */
 function renderDay() {
   const d = st.day, f = dayFrom(d), t = f + DAY;
@@ -495,8 +535,25 @@ function renderDay() {
     '</div>' + (s.unpaid > 0 ? '<div class="warn" style="margin-top:8px">금액이 안 적힌 배달이 ' + s.unpaid + '건 있어요. 아래 기록에서 배달 완료를 눌러 입력하세요.</div>' : '') +
     (s.avgWait != null ? '<div class="muted" style="margin-top:8px">평균 조리 대기 ' + one(s.avgWait / 60000) + '분 (가게 도착 → 픽업 완료)</div>' : '') +
     '</div>';
-  h += hourChart(s, '시간대별 콜');
-  h += '<div class="card"><div class="row between"><h2 style="margin:0">이동 경로</h2><button class="btn" onclick="showMap()">지도 보기</button></div><div id="mapbox"></div></div>';
+  if (st.trip != null) return renderTrip(data, f, t);
+  const hc = hourChart(s, '시간대별 콜');
+  h += '<div class="seg">' + [['trips', '배달별'], ['all', '전체 순서']].map(m => '<button class="' + (st.dayView === m[0] ? 'on' : '') + '" onclick="st.dayView=\'' + m[0] + '\';render()">' + m[1] + '</button>').join('') + '</div>';
+  if (st.dayView === 'trips') {
+    const trips = buildTrips(data);
+    const track = trips.length ? JSON.parse(A.getTrack(String(f), String(t))) : [];
+    h += '<div class="card"><h2>배달 ' + trips.length + '건</h2>';
+    if (!trips.length) h += '<div class="empty">배달 기록이 없어요</div>';
+    trips.forEach((tr, i) => {
+      const km = pathKm(track, tr.start, tr.end);
+      h += '<div class="store" onclick="openTrip(' + i + ')"><div style="flex:1;min-width:0"><div class="row between"><b>#' + tr.no + ' · ' + clock(tr.start) + ' ' + esc(tr.store || '가게 미확인') + '</b><b>' + (tr.fare != null ? won(tr.fare) : '') + '</b></div>' +
+        '<div class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">→ ' + esc(tr.dropAddr || '전달지 주소 없음') + '</div>' +
+        '<div class="muted" style="font-size:12px">' + (tr.deliver ? mins(tr.end - tr.start) : '진행 중') + (km > 0 ? ' · ' + km.toFixed(1) + 'km' : '') + (tr.arrive && tr.pickup ? ' · 가게 대기 ' + mins(tr.pickup.ts - tr.arrive.ts) : '') + '</div></div>' +
+        '<svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--faint);flex:none"><path d="m9 6 6 6-6 6"/></svg></div>';
+    });
+    h += '</div>';
+    return h + hc;
+  }
+  h += '<div class="card"><div class="row between"><h2 style="margin:0">하루 이동 경로</h2><button class="btn" onclick="showMap()">지도 보기</button></div><div id="mapbox"></div></div>';
   h += '<div class="card"><h2>기록 순서</h2><ul class="tl">';
   for (const e of data.events) {
     const name = storeName(data, e.store);
@@ -507,13 +564,57 @@ function renderDay() {
     if (e.type === 'PICKUP' && e._wait != null) meta = '대기 ' + one(e._wait / 60000) + '분';
     if (e.type === 'DELIVER') meta = e.amount != null ? won(e.amount) : '<span class="warn">금액 입력</span>';
     h += '<li onclick="tapEvent(' + e.id + ',\'' + e.type + '\',' + (e.amount == null ? 'null' : e.amount) + ')">' +
-      '<span class="t">' + clock(e.ts) + '</span><span class="tag ' + e.type + '">' + LABEL[e.type] + '</span>' +
-      '<span class="d">' + detail + '</span><span class="m">' + meta + '</span></li>';
+      '<span class="t">' + clock(e.ts) + '</span><span class="tag ' + e.type + '">' + (LABEL[e.type] || e.type) + '</span>' +
+      '<span class="d">' + detail + (e.addr ? '<div class="muted" style="font-size:12px;font-weight:400">' + esc(e.addr) + '</div>' : '') + '</span><span class="m">' + meta + '</span></li>';
   }
   h += '</ul><div class="muted" style="margin-top:8px">배민 화면에서 자동으로 기록돼요. 배달 완료를 누르면 금액 수정, 다른 기록을 누르면 삭제할 수 있어요.</div></div>';
+  return h + hc;
+}
+function openTrip(i) { st.trip = i; render(); window.scrollTo(0, 0); }
+function renderTrip(data, f, t) {
+  const trips = buildTrips(data);
+  const tr = trips[st.trip];
+  if (!tr) { st.trip = null; return renderDay(); }
+  let h = '<div class="datenav"><button onclick="st.trip=null;render()">◀</button><b>#' + tr.no + ' · ' + esc(tr.store || '가게 미확인') + '</b><span style="width:42px"></span></div>';
+  h += '<div class="card" style="padding:10px"><div id="tripmap" style="height:300px;border-radius:12px;display:grid;place-items:center;color:var(--sub);font-size:13px">지도 불러오는 중…</div></div>';
+  h += '<div class="card"><h2>주소</h2>' +
+    '<div class="store"><div><div class="muted" style="font-size:12px">출발 · 가게</div><div class="nm">' + esc(tr.store || '-') + '</div><div class="muted">' + esc(tr.pickAddr || '주소 없음') + '</div></div></div>' +
+    '<div class="store"><div><div class="muted" style="font-size:12px">도착 · 전달지</div><div class="nm">' + esc(tr.dropAddr || '주소 없음') + '</div></div></div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">전달지 주소는 오배달 확인용으로 폰에만 7일 보관되고 서버에는 올라가지 않아요.</div></div>';
+  const row = (k, e, extra) => e ? '<tr><td>' + k + '</td><td>' + clockS(e.ts) + '</td><td>' + (extra || '') + '</td></tr>' : '';
+  h += '<div class="card"><h2>진행</h2><table>' +
+    row('콜', tr.offer, tr.offer && tr.offer.amount != null ? won(tr.offer.amount) : '') +
+    row('수락', tr.accept, tr.offer && tr.accept ? '콜 후 ' + mins(tr.accept.ts - tr.offer.ts) : '') +
+    row('조리완료', tr.ready, '') +
+    row('가게 도착', tr.arrive, tr.accept && tr.arrive ? '수락 후 ' + mins(tr.arrive.ts - tr.accept.ts) : '') +
+    row('픽업', tr.pickup, tr.arrive && tr.pickup ? '대기 ' + mins(tr.pickup.ts - tr.arrive.ts) : '') +
+    row('배달 완료', tr.deliver, tr.pickup && tr.deliver ? '이동 ' + mins(tr.deliver.ts - tr.pickup.ts) : '') +
+    '</table>';
+  const track = JSON.parse(A.getTrack(String(tr.start - 30000), String(tr.end + 30000)));
+  const km = pathKm(track, tr.start, tr.end);
+  h += '<div class="grid" style="margin-top:12px">' + stat('배달료', tr.fare != null ? won(tr.fare) : '-') + stat('총 소요', tr.deliver ? mins(tr.end - tr.start) : '진행 중') + stat('이동', km > 0 ? km.toFixed(1) + 'km' : '-') + '</div></div>';
+  setTimeout(() => drawTripMap(tr, track), 0);
   return h;
 }
-function moveDay(n) { const nd = addDays(st.day, n); if (dayFrom(nd) <= Date.now()) { st.day = nd; render(); } }
+function drawTripMap(tr, track) {
+  const box = document.getElementById('tripmap');
+  if (!box) return;
+  const pts = track.map(p => [p[1], p[2]]);
+  const pick = [tr.arrive, tr.pickup].find(e => e && e.lat != null);
+  const drop = tr.deliver && tr.deliver.lat != null ? tr.deliver : null;
+  if (!pts.length && !pick && !drop) { box.textContent = 'GPS 기록이 없어요'; return; }
+  loadNaver(() => {
+    box.innerHTML = '';
+    const map = new naver.maps.Map(box, { zoom: 15, center: pick ? LL(pick.lat, pick.lng) : LL(pts[0][0], pts[0][1]), scaleControl: false, mapDataControl: false });
+    const bounds = new naver.maps.LatLngBounds();
+    if (pts.length) { const path = pts.map(p => LL(p[0], p[1])); new naver.maps.Polyline({ map, path, strokeColor: '#F2611D', strokeWeight: 5, strokeOpacity: .9, strokeLineCap: 'round', strokeLineJoin: 'round' }); path.forEach(p => bounds.extend(p)); }
+    const pin = (e, label, color) => { const p = LL(e.lat, e.lng); bounds.extend(p); new naver.maps.Marker({ map, position: p, icon: { content: '<div style="background:' + color + ';color:#fff;font:800 12px sans-serif;padding:5px 8px;border-radius:10px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap">' + label + '</div>', anchor: new naver.maps.Point(20, 30) } }); };
+    if (pick) pin(pick, '출발 · 가게', '#2563EB');
+    if (drop) pin(drop, '도착 · 전달지', '#F2611D');
+    map.fitBounds(bounds, { top: 50, right: 40, bottom: 30, left: 40 });
+  }, why => mapFail(box, why));
+}
+function moveDay(n) { st.trip = null; const nd = addDays(st.day, n); if (dayFrom(nd) <= Date.now()) { st.day = nd; render(); } }
 function tapEvent(id, type, amount) {
   if (type === 'DELIVER') {
     const v = prompt('배달 금액 (원)', amount == null ? '' : String(amount));
@@ -580,9 +681,6 @@ function showMap() {
       naver.maps.Event.addListener(m, 'click', () => info.getMap() ? info.close() : info.open(map, m));
       bounds.extend(LL(e.lat, e.lng)); any = true;
     }
-    for (const c of JSON.parse(A.getCameras ? A.getCameras() : '[]')) {
-      if (c.confirmed) new naver.maps.Marker({ map, position: LL(c.lat, c.lng), icon: camIcon(c) });
-    }
     if (any) map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
   }, why => mapFail(box, why));
 }
@@ -625,7 +723,7 @@ function renderPeriod() {
   h += '</table><div class="muted" style="margin-top:8px">여기서 콜 지수는 이 기간 평균을 100으로 본 값이에요. 날짜를 누르면 그날 상세로 가요.</div></div>';
   return h;
 }
-function goDay(k) { st.day = parseKey(k); setTab('day'); }
+function goDay(k) { st.trip = null; st.day = parseKey(k); setTab('day'); }
 
 /* ================= 화면: 정산 ================= */
 function renderPay() {
@@ -698,7 +796,7 @@ function renameStore(id) {
 }
 
 /* ================= 공통 ================= */
-function setTab(t) { st.tab = t; render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t !== 'day') st.trip = null; st.tab = t; render(); window.scrollTo(0, 0); }
 function render() {
   applyThemeClass();
   const running = A.isRunning();
@@ -715,7 +813,7 @@ function render() {
   }
 }
 window.refresh = function () {
-  if (st.tab === 'cams') return;
+  if (st.tab === 'cams' || (st.tab === 'day' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'stores' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   render();

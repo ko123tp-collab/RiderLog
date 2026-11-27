@@ -107,6 +107,12 @@ object Sync {
             if (sent && from < now - 2 * 24 * 3600_000L) continue
             o.put("points", org.json.JSONArray(db.trackJson(from, to)))
             o.remove("stores") // 가게 목록은 stores.json 하나로
+            // 고객 전달지 주소는 서버에 올리지 않음 (가게 주소만 남김)
+            val evs = o.getJSONArray("events")
+            for (i in 0 until evs.length()) {
+                val e = evs.getJSONObject(i)
+                if (e.optString("type") in setOf("OFFER", "ACCEPT", "DELIVER")) e.remove("addr")
+            }
             if (put(ctx, repo, token, path, o.toString(1).toByteArray())) uploaded++
         }
 
