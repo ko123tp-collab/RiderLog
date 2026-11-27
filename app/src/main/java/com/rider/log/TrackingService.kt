@@ -44,7 +44,7 @@ import kotlin.math.sin
  * - GPS 경로를 5초마다 저장
  * - 화면 위에 오버레이 버튼(수락/거절/가게 도착/픽업 완료/배달 완료/되돌리기)을 띄움
  */
-class TrackingService : Service(), LocationListener {
+class TrackingService : Service(), LocationListener, Recognizer.Sink {
 
     companion object {
         const val ACTION_START = "com.rider.log.START"
@@ -61,6 +61,9 @@ class TrackingService : Service(), LocationListener {
 
         @Volatile
         var running = false
+
+        @Volatile
+        var instance: TrackingService? = null
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -123,6 +126,7 @@ class TrackingService : Service(), LocationListener {
         shiftId = open ?: db.startShift(System.currentTimeMillis())
         if (!running) {
             running = true
+            instance = this
             alerter = Alerter(this)
             reloadCameras()
             startLocation()
@@ -133,6 +137,7 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onDestroy() {
+        instance = null
         main.removeCallbacks(syncTick)
         alerter?.shutdown()
         alerter = null
@@ -151,6 +156,7 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun finishShift() {
+        instance = null
         main.removeCallbacks(syncTick)
         Sync.runAsync(this) // 운행 종료 시 마지막 업로드
         alerter?.shutdown()
@@ -239,6 +245,37 @@ class TrackingService : Service(), LocationListener {
             )
         }
         if (loc.provider == LocationManager.GPS_PROVIDER) checkCameras(loc)
+    }
+
+    // ---------------- 배민 화면 자동 인식 결과 기록 ----------------
+
+    override fun autoEvent(type: String, ts: Long, store: String?, amount: Int?, note: String?) {
+        main.post {
+            if (!running) return@post
+            // 오버레이 버튼으로 이미 누른 기록이 있으면 중복 저장 안 함
+            val window = if (type == "OFFER" || type == "ACCEPT" || type == "REJECT") 8_000L else 60_000L
+            if (type != "OFFER" && type != "READY" && db.hasNear(shiftId, type, ts, window)) return@post
+            val loc = lastLoc
+            var storeId: Long? = null
+            if (store != null && (type == "ARRIVE" || type == "PICKUP" || type == "READY" || type == "DELIVER")) {
+                storeId = db.storeByName(store)
+                if (storeId == null && loc != null && (type == "ARRIVE" || type == "PICKUP")) {
+                    storeId = db.addStore(store, loc.latitude, loc.longitude)
+                }
+            }
+            val n = if (type == "OFFER" || type == "ACCEPT" || type == "REJECT") listOfNotNull(store, note).joinToString(" · ").ifEmpty { null } else note
+            db.addAutoEvent(shiftId, ts, type, loc?.latitude, loc?.longitude, storeId, amount, n)
+            updateHandle()
+        }
+    }
+
+    override fun autoEndShift() {
+        main.post {
+            if (running) {
+                Toast.makeText(applicationContext, "배민 운행 종료 · Rider Log 운행도 종료했어요", Toast.LENGTH_LONG).show()
+                finishShift()
+            }
+        }
     }
 
     // ---------------- 후면 단속 카메라 알림 ----------------

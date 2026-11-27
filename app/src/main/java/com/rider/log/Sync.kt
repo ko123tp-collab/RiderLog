@@ -226,6 +226,8 @@ object Sync {
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val code = c.responseCode
         c.disconnect()
+        if (code == 404) throw Exception("저장소를 찾을 수 없어요. 저장소 이름과 토큰의 저장소 접근 권한을 확인해 주세요")
+        if (code == 403) throw Exception("쓰기 권한이 없어요. 토큰의 Contents 권한을 Read and write로 바꿔 주세요")
         if (code !in 200..201) throw Exception("업로드 실패($code): $path")
         hashes.put(path, h)
         p.edit().putString("hashes", hashes.toString()).apply()

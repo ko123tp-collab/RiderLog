@@ -12,7 +12,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** 모든 기록은 폰 안의 SQLite 파일 하나에 저장된다. */
-class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", null, 2) {
+class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", null, 3) {
 
     companion object {
         @Volatile
@@ -37,7 +37,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE shifts(id INTEGER PRIMARY KEY AUTOINCREMENT, start_ts INTEGER NOT NULL, end_ts INTEGER)")
         db.execSQL("CREATE TABLE stores(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL)")
-        db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, lat REAL, lng REAL, store_id INTEGER, amount INTEGER)")
+        db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, lat REAL, lng REAL, store_id INTEGER, amount INTEGER, note TEXT, source TEXT)")
         db.execSQL("CREATE TABLE points(id INTEGER PRIMARY KEY AUTOINCREMENT, shift_id INTEGER NOT NULL, ts INTEGER NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL, speed REAL, acc REAL)")
         db.execSQL("CREATE INDEX idx_events_ts ON events(ts)")
         db.execSQL("CREATE INDEX idx_points_ts ON points(ts)")
@@ -48,6 +48,10 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE points ADD COLUMN acc REAL")
             createCameras(db)
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE events ADD COLUMN note TEXT")
+            db.execSQL("ALTER TABLE events ADD COLUMN source TEXT")
         }
     }
 
@@ -200,6 +204,34 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
 
     // ---------- 버튼 기록 ----------
 
+    /** 같은 종류 기록이 ±window 안에 이미 있으면 true (오버레이 버튼과 자동 인식 중복 방지) */
+    fun hasNear(shift: Long, type: String, ts: Long, window: Long): Boolean {
+        readableDatabase.rawQuery(
+            "SELECT 1 FROM events WHERE shift_id=? AND type=? AND ts BETWEEN ? AND ? LIMIT 1",
+            arrayOf(shift.toString(), type, (ts - window).toString(), (ts + window).toString())
+        ).use { c -> return c.moveToFirst() }
+    }
+
+    fun storeByName(name: String): Long? {
+        readableDatabase.rawQuery("SELECT id FROM stores WHERE name=? ORDER BY id LIMIT 1", arrayOf(name)).use { c ->
+            return if (c.moveToFirst()) c.getLong(0) else null
+        }
+    }
+
+    fun addAutoEvent(shift: Long, ts: Long, type: String, lat: Double?, lng: Double?, storeId: Long?, amount: Int?, note: String?): Long {
+        val cv = ContentValues()
+        cv.put("shift_id", shift)
+        cv.put("ts", ts)
+        cv.put("type", type)
+        if (lat != null) cv.put("lat", lat)
+        if (lng != null) cv.put("lng", lng)
+        if (storeId != null) cv.put("store_id", storeId)
+        if (amount != null) cv.put("amount", amount)
+        if (note != null) cv.put("note", note)
+        cv.put("source", "auto")
+        return writableDatabase.insert("events", null, cv)
+    }
+
     fun addEvent(shift: Long, ts: Long, type: String, lat: Double?, lng: Double?): Long {
         val cv = ContentValues()
         cv.put("shift_id", shift)
@@ -329,7 +361,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
     private fun eventsJson(from: Long, to: Long): JSONArray {
         val arr = JSONArray()
         readableDatabase.rawQuery(
-            "SELECT id, shift_id, ts, type, lat, lng, store_id, amount FROM events WHERE ts >= ? AND ts < ? ORDER BY ts, id",
+            "SELECT id, shift_id, ts, type, lat, lng, store_id, amount, note, source FROM events WHERE ts >= ? AND ts < ? ORDER BY ts, id",
             arrayOf(from.toString(), to.toString())
         ).use { c ->
             while (c.moveToNext()) {
@@ -342,6 +374,8 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "rider.db", n
                 j.put("lng", if (c.isNull(5)) JSONObject.NULL else c.getDouble(5))
                 j.put("store", if (c.isNull(6)) JSONObject.NULL else c.getLong(6))
                 j.put("amount", if (c.isNull(7)) JSONObject.NULL else c.getInt(7))
+                j.put("note", if (c.isNull(8)) JSONObject.NULL else c.getString(8))
+                j.put("src", if (c.isNull(9)) "button" else c.getString(9))
                 arr.put(j)
             }
         }

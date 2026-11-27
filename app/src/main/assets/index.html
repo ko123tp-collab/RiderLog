@@ -79,6 +79,8 @@
   .tag.REJECT { color: var(--t-REJECT); background: color-mix(in srgb, var(--t-REJECT) 14%, transparent); }
   .tag.ARRIVE { color: var(--t-ARRIVE); background: color-mix(in srgb, var(--t-ARRIVE) 14%, transparent); }
   .tag.PICKUP { color: var(--t-PICKUP); background: color-mix(in srgb, var(--t-PICKUP) 14%, transparent); }
+  .tag.OFFER { color: var(--sub); background: var(--card2); }
+  .tag.READY { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
   .tag.DELIVER { color: var(--t-DELIVER); background: color-mix(in srgb, var(--t-DELIVER) 14%, transparent); }
   .tl .d { flex: 1; font-size: 14px; font-weight: 600; }
   .tl .m { font-size: 12px; color: var(--sub); }
@@ -135,7 +137,7 @@
 /* ================= 기본 설정 ================= */
 const H = 3600e3, DAY = 24 * H;
 const CUT_HOUR = 6; // 새벽 6시 이전 기록은 전날 근무로 계산
-const LABEL = { ACCEPT: '수락', REJECT: '거절', ARRIVE: '가게 도착', PICKUP: '픽업 완료', DELIVER: '배달 완료' };
+const LABEL = { OFFER: '콜', ACCEPT: '수락', REJECT: '거절', ARRIVE: '가게 도착', READY: '조리완료', PICKUP: '픽업 완료', DELIVER: '배달 완료' };
 const HOUR_ORDER = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5];
 const A = window.Android || makeMock();
 
@@ -191,7 +193,7 @@ function stats(data, from, to) {
       t = next;
     }
   }
-  const c = { ACCEPT: 0, REJECT: 0, ARRIVE: 0, PICKUP: 0, DELIVER: 0 };
+  const c = { OFFER: 0, ACCEPT: 0, REJECT: 0, ARRIVE: 0, READY: 0, PICKUP: 0, DELIVER: 0 };
   const hours = Array.from({ length: 24 }, () => ({ offer: 0, acc: 0, del: 0 }));
   let income = 0, paid = 0, pend = null;
   const waits = [];
@@ -200,6 +202,7 @@ function stats(data, from, to) {
     c[e.type]++;
     const h = new Date(e.ts).getHours();
     if (e.type === 'ACCEPT' || e.type === 'REJECT') { hours[h].offer++; if (e.type === 'ACCEPT') hours[h].acc++; }
+    if (e.type === 'REJECT' && e.note && String(e.note).indexOf('시간초과') >= 0) c.TIMEOUT = (c.TIMEOUT || 0) + 1;
     if (e.type === 'DELIVER') { hours[h].del++; if (e.amount != null) { income += e.amount; paid++; } }
     if (e.type === 'ARRIVE') pend = e;
     if (e.type === 'PICKUP') {
@@ -499,13 +502,15 @@ function renderDay() {
     const name = storeName(data, e.store);
     let detail = name ? esc(name) : '';
     let meta = '';
+    if (!detail && e.note && (e.type === 'OFFER' || e.type === 'ACCEPT' || e.type === 'REJECT')) detail = esc(e.note);
+    if (e.type === 'OFFER' && e.amount != null) meta = won(e.amount);
     if (e.type === 'PICKUP' && e._wait != null) meta = '대기 ' + one(e._wait / 60000) + '분';
     if (e.type === 'DELIVER') meta = e.amount != null ? won(e.amount) : '<span class="warn">금액 입력</span>';
     h += '<li onclick="tapEvent(' + e.id + ',\'' + e.type + '\',' + (e.amount == null ? 'null' : e.amount) + ')">' +
       '<span class="t">' + clock(e.ts) + '</span><span class="tag ' + e.type + '">' + LABEL[e.type] + '</span>' +
       '<span class="d">' + detail + '</span><span class="m">' + meta + '</span></li>';
   }
-  h += '</ul><div class="muted" style="margin-top:8px">배달 완료를 누르면 금액 수정, 다른 기록을 누르면 삭제할 수 있어요.</div></div>';
+  h += '</ul><div class="muted" style="margin-top:8px">배민 화면에서 자동으로 기록돼요. 배달 완료를 누르면 금액 수정, 다른 기록을 누르면 삭제할 수 있어요.</div></div>';
   return h;
 }
 function moveDay(n) { const nd = addDays(st.day, n); if (dayFrom(nd) <= Date.now()) { st.day = nd; render(); } }

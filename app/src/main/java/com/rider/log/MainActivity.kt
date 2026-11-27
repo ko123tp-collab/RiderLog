@@ -59,6 +59,7 @@ class MainActivity : Activity() {
         // 네이버 지도 인증이 https://ko123tp-collab.github.io 주소로 등록되어 있어서, 그 주소에서 연 화면으로 띄움
         val html = assets.open("index.html").bufferedReader().use { it.readText() }
         web.loadDataWithBaseURL("https://ko123tp-collab.github.io/", html, "text/html", "utf-8", null)
+        if (intent?.getBooleanExtra("autostart", false) == true) main.postDelayed({ requestStart() }, 500)
     }
 
     // ---------------- 자동 업데이트 ----------------
@@ -151,6 +152,10 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra("autostart", false)) {
+            requestStart()
+            return
+        }
         if (intent.action != ACTION_INSTALL_STATUS) return
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {

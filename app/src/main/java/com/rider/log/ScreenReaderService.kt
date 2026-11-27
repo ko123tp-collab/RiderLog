@@ -27,6 +27,10 @@ class ScreenReaderService : AccessibilityService() {
 
     companion object {
         const val PREFS = "capture"
+        const val BAEMIN = "com.woowahan.bros"
+
+        /** 계속 번갈아 바뀌는 안내 문구 — 같은 화면으로 취급 */
+        private val ROTATING = setOf("새로운 대기배달을 0 배지로 알려드려요!", "현재 위치와 가까운 배차를 찾고 있어요")
         private const val MAX_NODES = 700
         private const val MAX_DEPTH = 45
 
@@ -55,6 +59,39 @@ class ScreenReaderService : AccessibilityService() {
 
     /** 화면을 읽은 마지막 시각 (0.5초 간격 제한용) */
     private var lastWalkTs = 0L
+    private val recognizer = Recognizer()
+    private var lastRemind = 0L
+
+    /** 배민은 운행 중인데 Rider Log 운행이 꺼져 있으면 알림 (30분에 한 번) */
+    private fun remindIfWorking() {
+        val now = System.currentTimeMillis()
+        if (now - lastRemind < 30 * 60_000L) return
+        val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
+        val working = try {
+            root.findAccessibilityNodeInfosByViewId("$BAEMIN:id/신규배차_끄기버튼").isNotEmpty() ||
+                root.findAccessibilityNodeInfosByViewId("$BAEMIN:id/신규배차_켜기버튼").isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
+        if (!working) return
+        lastRemind = now
+        val nm = getSystemService(android.app.NotificationManager::class.java) ?: return
+        nm.createNotificationChannel(android.app.NotificationChannel("remind", "운행 알림", android.app.NotificationManager.IMPORTANCE_HIGH))
+        val pi = android.app.PendingIntent.getActivity(
+            this, 7, android.content.Intent(this, MainActivity::class.java).putExtra("autostart", true)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        nm.notify(
+            2, android.app.Notification.Builder(this, "remind")
+                .setSmallIcon(R.drawable.ic_stat_r)
+                .setContentTitle("배민은 운행 중이에요")
+                .setContentText("눌러서 Rider Log 운행도 시작하세요")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+        )
+    }
     private var lastSaveTs = 0L
     private var lastExactSig = 0
     private var lastNormSig = 0
@@ -79,9 +116,12 @@ class ScreenReaderService : AccessibilityService() {
         if (ev.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) rememberApp(pkg)
 
         if (!prefs.getBoolean("on", false)) return
-        if (!TrackingService.running) return // 운행 중에만 기록
         val selected = prefs.getStringSet("apps", emptySet()) ?: emptySet()
         if (pkg !in selected) return
+        if (!TrackingService.running) { // 운행 중에만 기록. 대신 배민이 운행 중이면 알려 줌
+            if (pkg == BAEMIN) remindIfWorking()
+            return
+        }
 
         val now = System.currentTimeMillis()
         when (ev.eventType) {
@@ -131,7 +171,14 @@ class ScreenReaderService : AccessibilityService() {
         val root = findRoot(pkg) ?: return
         val nodes = JSONArray()
         val sig = StringBuilder()
-        walk(root, 0, nodes, sig)
+        val raw = ArrayList<Recognizer.N>()
+        walk(root, 0, nodes, sig, raw)
+        if (pkg == BAEMIN) {
+            try {
+                TrackingService.instance?.let { recognizer.onScreen(raw, now, it) }
+            } catch (e: Exception) {
+            }
+        }
         val exact = sig.toString().hashCode()
         val norm = sig.toString().replace(Regex("\\d"), "#").hashCode()
         if (exact == lastExactSig) return // 완전히 같은 화면
@@ -166,11 +213,16 @@ class ScreenReaderService : AccessibilityService() {
         return null
     }
 
-    private fun walk(node: AccessibilityNodeInfo, depth: Int, out: JSONArray, sig: StringBuilder) {
+    private fun walk(node: AccessibilityNodeInfo, depth: Int, out: JSONArray, sig: StringBuilder, raw: ArrayList<Recognizer.N>) {
         if (out.length() >= MAX_NODES || depth > MAX_DEPTH) return
-        val text = node.text?.toString()
-        val desc = node.contentDescription?.toString()
         val id = node.viewIdResourceName
+        val idl = id?.lowercase() ?: ""
+        // 로그인 화면(아이디·비밀번호)과 비밀번호 칸은 아예 읽지 않음
+        val secret = node.isPassword || idl.contains("login") || idl.contains("password")
+        var text = if (secret) null else node.text?.toString()
+        val desc = if (secret) null else node.contentDescription?.toString()
+        if (text != null && text in ROTATING) text = null
+        raw.add(Recognizer.N(id?.substringAfter(":id/"), text ?: desc ?: ""))
         val clickable = node.isClickable
         if (!text.isNullOrBlank() || !desc.isNullOrBlank() || id != null || clickable) {
             val j = JSONObject()
@@ -200,7 +252,7 @@ class ScreenReaderService : AccessibilityService() {
             } catch (e: Exception) {
                 null
             } ?: continue
-            walk(child, depth + 1, out, sig)
+            walk(child, depth + 1, out, sig, raw)
         }
     }
 
