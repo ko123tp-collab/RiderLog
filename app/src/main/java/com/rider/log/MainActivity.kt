@@ -550,6 +550,9 @@ class MainActivity : Activity() {
         fun moneySavePlan(txId: String, json: String) = Money.savePlan(this@MainActivity, txId.toLong(), json)
 
         @JavascriptInterface
+        fun moneyReplan(txId: String, json: String) = Money.replan(this@MainActivity, txId.toLong(), json)
+
+        @JavascriptInterface
         fun moneyMoveDone(txId: String, idx: String) = Money.moveDone(this@MainActivity, txId.toLong(), idx.toInt())
 
         @JavascriptInterface

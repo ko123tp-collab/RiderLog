@@ -1441,6 +1441,16 @@ function makeMoves(M, P, amount) {
   }
   return out;
 }
+/** 입금 처리 방식에 따른 옮기기 계획 (null = 계획 없음) */
+function inMoves(M, P, t) {
+  const g = t.target || '';
+  if (g === 'income' || g === 'in:split') return makeMoves(M, P, t.amount);
+  const m = /^in:(fixed|living|off|cash)$/.exec(g);
+  if (m) return [{ pot: m[1], amount: t.amount, done: 0 }];
+  const r = /^in:repay:(\d+)$/.exec(g);
+  if (r && P.loans) { const l = P.loans.loans.find(x => x.id === +r[1]); if (l) return [{ pot: l.from, amount: Math.min(t.amount, Math.max(0, l.left) || t.amount), done: 0 }]; }
+  return null;
+}
 function spendBy(M, from, to) {
   const cats = {};
   let total = 0;
@@ -1482,9 +1492,9 @@ function moneyCtx(again) {
     const planned = new Set(M.planned || []);
     let made = false;
     for (const t of M.txs) {
-      if (t.kind === 'in' && t.target === 'income' && !planned.has(t.id) && Date.now() - t.ts < 2 * DAY) {
-        A.moneySavePlan(String(t.id), JSON.stringify(makeMoves(M, P, t.amount))); made = true;
-      }
+      if (t.kind !== 'in' || planned.has(t.id) || t.status === 'ask' || Date.now() - t.ts > 6 * DAY) continue;
+      const mv = inMoves(M, P, t);
+      if (mv) { A.moneySavePlan(String(t.id), JSON.stringify(mv)); made = true; }
     }
     if (made) return moneyCtx(true);
   }
@@ -1493,6 +1503,10 @@ function moneyCtx(again) {
   for (const p of (M.plans || [])) p.moves.forEach((m, i) => { if (!m.done) pending.push({ tx: p.tx, i, pot: m.pot, amount: m.amount }); });
   const pendingSum = pending.reduce((a, m) => a + m.amount, 0);
   const bank = M.bank ? M.bank.balance : null;
+  // '바로 나갈 돈'으로 받은 금액 중 아직 안 나간 것
+  let passHeld = 0;
+  for (const t of M.txs) { if (t.target === 'in:pass') passHeld += t.amount; else if (t.target === 'out:pass') passHeld -= t.amount; }
+  passHeld = Math.max(0, passHeld);
   const f = dayFrom(today);
   const sd = stats(load(f, f + DAY), f, f + DAY);
   const work = !mIsOff(M, tk);
@@ -1502,7 +1516,7 @@ function moneyCtx(again) {
   let spent = 0;
   for (const t of M.txs) if (t.kind === 'out' && t.target.indexOf('cat:') === 0 && key(workDate(t.ts)) === tk) spent += t.amount;
   return {
-    M, P, fee, today, tk, pending, pendingSum, bank, free: bank == null ? null : bank - pendingSum,
+    M, P, fee, today, tk, pending, pendingSum, passHeld, bank, free: bank == null ? null : bank - pendingSum - passHeld,
     sd, netToday: netOf(sd.income, sd.c.DELIVER, fee), boss, goal, work, spent,
     ask: M.txs.filter(t => t.status === 'ask')
   };
@@ -1512,7 +1526,12 @@ function ddCls(o) { return o.paid ? 'ok' : o.i < 0 ? 'late' : o.i <= 3 ? 'soon' 
 function tgtText(t, M) {
   if (!t) return '-';
   if (t === 'income') return '배달 정산';
-  if (t === 'etcin') return '기타 입금';
+  if (t === 'etcin' || t === 'in:free') return '내 돈 (자유롭게)';
+  if (t === 'in:split') return '정산처럼 나눠 담기';
+  if (t === 'in:pass' || t === 'out:pass') return '바로 나갈 돈 (논외)';
+  if (t === 'in:mix') return '나눠서 처리';
+  if (/^in:(fixed|living|off|cash)$/.test(t)) return POTS[t.slice(3)].app + '에 통째로';
+  if (t.indexOf('in:repay:') === 0) return '빚 갚기';
   const p = t.split(':');
   if (p[0] === 'pot') return POTS[p[1]] ? POTS[p[1]].app + '로 옮김' : t;
   if (p[0] === 'potback') return POTS[p[1]] ? POTS[p[1]].app + '에서 되돌림' : t;
@@ -1536,6 +1555,7 @@ function renderMoney() {
   if (st.assign != null) h += assignSheet(C);
   if (st.bill) h += billSheet(C);
   if (st.xfer) h += xferSheet(C);
+  if (st.mix) h += mixSheet(C);
   return h;
 }
 
@@ -1546,7 +1566,7 @@ function moneyToday(C) {
   if (C.bank == null) h += '<div class="mbig">-</div><div style="font-size:12px;opacity:.7;margin-top:4px">새마을금고 알림이 한 번 오면 잔액이 잡혀요</div>';
   else {
     h += '<div class="mbig" style="' + (C.free < 0 ? 'color:#FF8A8A' : '') + '">' + (C.free < 0 ? '−' + num(-C.free) : num(C.free)) + '원</div>' +
-      '<div style="font-size:12px;opacity:.7;margin-top:4px">잔액 ' + num(C.bank) + '원' + (C.pendingSum ? ' − 아직 안 옮긴 돈 ' + num(C.pendingSum) + '원' : '') + ' · ' + mWhen(M.bank.ts) + ' 기준</div>';
+      '<div style="font-size:12px;opacity:.7;margin-top:4px">잔액 ' + num(C.bank) + '원' + (C.pendingSum ? ' − 아직 안 옮긴 돈 ' + num(C.pendingSum) + '원' : '') + (C.passHeld ? ' − 바로 나갈 돈 ' + num(C.passHeld) + '원' : '') + ' · ' + mWhen(M.bank.ts) + ' 기준</div>';
   }
   if (C.work) {
     const p = Math.min(100, C.spent / Math.max(1, s.workSpend) * 100);
@@ -1642,13 +1662,16 @@ function assignSheet(C) {
   const opt = (target, label) => '<button class="' + (t.target === target && t.status === 'ask' ? 'sug' : '') + '" onclick="doAssign(' + t.id + ',\'' + target + '\')">' + label + '</button>';
   let h = '<div class="msheet" onclick="if(event.target===this){st.assign=null;render()}"><div class="in"><div class="row between"><b style="font-size:17px">' + esc(t.party || '거래') + '</b><b style="font-size:17px">' + (t.kind === 'in' ? '+' : '−') + num(t.amount) + '원</b></div><div class="muted">' + mWhen(t.ts) + ' · 지금: ' + esc(tgtText(t.target, C.M)) + (t.status === 'ask' ? ' (확인 전)' : '') + '</div>';
   if (t.kind === 'in') {
-    h += '<div class="sec" style="margin-left:0">입금</div><div class="opts">' + opt('income', '배달 정산') + opt('etcin', '기타 입금') + '</div>';
-    h += '<div class="sec" style="margin-left:0">금고에서 되돌림</div><div class="opts">' + Object.keys(POTS).map(p => opt('potback:' + p, POTS[p].icon + ' ' + POTS[p].app)).join('') + '</div>';
+    h += '<div class="sec" style="margin-left:0">어떻게 쓸까요?</div><div class="opts">' + opt('in:free', '🙂 내 돈 (자유롭게)') + opt('in:split', '📥 정산처럼 나눠 담기') + opt('in:pass', '↪️ 바로 나갈 돈 (논외)') + '<button onclick="openMix(' + t.id + ')">✂️ 나눠서…</button>' + opt('income', '🛵 배달 정산') + '</div>';
+    h += '<div class="sec" style="margin-left:0">한 금고에 통째로</div><div class="opts">' + Object.keys(POTS).map(p => opt('in:' + p, POTS[p].icon + ' ' + POTS[p].name)).join('') + '</div>';
+    const open = C.P.loans ? C.P.loans.open : [];
+    if (open.length) h += '<div class="sec" style="margin-left:0">빚 갚기</div><div class="opts">' + open.map(l => opt('in:repay:' + l.id, POTS[l.from].icon + ' ' + POTS[l.from].app + '에 ' + num(Math.min(l.left, t.amount)) + '원')).join('') + '</div>';
+    h += '<div class="sec" style="margin-left:0">금고에서 새마을금고로 되돌린 돈</div><div class="opts">' + Object.keys(POTS).map(p => opt('potback:' + p, POTS[p].icon + ' ' + POTS[p].app)).join('') + '</div>';
   } else {
     h += '<div class="sec" style="margin-left:0">금고로 옮김</div><div class="opts">' + Object.keys(POTS).map(p => opt('pot:' + p, POTS[p].icon + ' ' + POTS[p].app)).join('') + '</div>';
     const bills = C.P.occ.filter(o => o.kind === 'bill' && o.i >= -7 && o.i <= 10 && (!o.paid || C.M.paid.some(p => p.tx === t.id && p.bill === o.id && p.due === o.due)));
     if (bills.length) h += '<div class="sec" style="margin-left:0">고정비 냄</div><div class="opts">' + bills.map(o => opt('bill:' + o.id + ':' + o.due, esc(o.name) + ' (' + parseKey(o.due).getDate() + '일)')).join('') + '</div>';
-    h += '<div class="sec" style="margin-left:0">지출</div><div class="opts">' + SPEND_CATS.map(c => opt('cat:' + c, c)).join('') + '</div>';
+    h += '<div class="sec" style="margin-left:0">지출</div><div class="opts">' + SPEND_CATS.map(c => opt('cat:' + c, c)).join('') + opt('out:pass', '↪️ 맡은 돈 내보냄 (논외)') + '</div>';
   }
   h += '<label class="row" style="gap:8px;font-size:14px;font-weight:700"><input type="checkbox" id="asRemember" ' + (remDefault(t) ? 'checked' : '') + ' onchange="st.asRemember=this.checked"> 다음에도 "' + esc((t.party || '').slice(0, 16)) + '"는 이걸로</label>' +
     '<div class="muted" style="font-size:12px;margin-top:6px">금고 옮기기는 체크해도 확인을 한 번 더 물어봐요 (같은 이름으로 결제할 수도 있어서).</div>' +
@@ -1656,11 +1679,44 @@ function assignSheet(C) {
   return h;
 }
 function remDefault(t) { return st.asRemember == null ? !/카카오페이|네이버페이|당근|토스|ATM|CD/i.test(t.party || '') : st.asRemember; }
+function openMix(id) { st.assign = null; st.mix = { id, free: '', fixed: '', living: '', off: '', cash: '' }; render(); }
+function mixSheet(C) {
+  const x = st.mix, t = C.M.txs.find(y => y.id === x.id);
+  if (!t) { st.mix = null; return ''; }
+  const used = ['free', 'fixed', 'living', 'off', 'cash'].reduce((a, k) => a + (Number(x[k]) || 0), 0);
+  const left = t.amount - used;
+  const row = (k, label) => '<div class="row" style="margin-bottom:8px"><span style="width:118px;flex:none;font-weight:700;font-size:14px">' + label + '</span><input type="number" inputmode="numeric" value="' + esc(x[k]) + '" oninput="st.mix.' + k + '=this.value;document.getElementById(\'mixLeft\').textContent=mixLeftText()"></div>';
+  return '<div class="msheet" onclick="if(event.target===this){st.mix=null;render()}"><div class="in"><div class="row between"><b style="font-size:18px">' + esc(t.party || '입금') + '</b><b style="font-size:18px">+' + num(t.amount) + '원</b></div><div class="muted" style="margin-bottom:12px">금액을 나눠서 정해요. 남는 돈은 내 돈으로 둬요.</div>' +
+    row('fixed', '💳 고정비') + row('living', '🛒 생활비') + row('off', '🥕 휴무 용돈') + row('cash', '💵 저축') + row('free', '🙂 내 돈') +
+    '<div class="muted" id="mixLeft" style="font-weight:700;margin:4px 0 10px">' + mixLeftText() + '</div>' +
+    '<button class="big" onclick="saveMix()">저장</button><button class="btn" style="width:100%;margin-top:10px" onclick="st.mix=null;render()">닫기</button></div></div>';
+}
+function mixLeftText() {
+  const x = st.mix, t = st.mc.M.txs.find(y => y.id === x.id);
+  const used = ['free', 'fixed', 'living', 'off', 'cash'].reduce((a, k) => a + (Number(x[k]) || 0), 0);
+  const left = t.amount - used;
+  return left >= 0 ? '남은 ' + num(left) + '원 → 내 돈' : num(-left) + '원 넘었어요';
+}
+function saveMix() {
+  const x = st.mix, t = st.mc.M.txs.find(y => y.id === x.id);
+  const mv = [];
+  let used = 0;
+  for (const p of ['fixed', 'living', 'off', 'cash']) { const n = Math.round(Number(x[p]) || 0); if (n > 0) { mv.push({ pot: p, amount: n, done: 0 }); used += n; } }
+  used += Number(x.free) || 0;
+  if (used > t.amount) { alert('입금액보다 많아요'); return; }
+  A.moneyAssign(String(t.id), 'in:mix', false);
+  A.moneyReplan(String(t.id), JSON.stringify(mv));
+  st.mix = null; render();
+}
 function doAssign(id, target) {
   const t = st.mc.M.txs.find(x => x.id === id);
   const rem = (t ? remDefault(t) : false) && target.indexOf('bill:') !== 0;
   st.asRemember = null;
-  A.moneyAssign(String(id), target, rem && target.indexOf('pot:') !== 0 && target.indexOf('potback:') !== 0);
+  A.moneyAssign(String(id), target, rem && target.indexOf('pot:') !== 0 && target.indexOf('potback:') !== 0 && target.indexOf('in:repay') !== 0);
+  if (t && t.kind === 'in' && A.moneyReplan) {
+    const nt = Object.assign({}, t, { target });
+    A.moneyReplan(String(id), JSON.stringify(inMoves(st.mc.M, st.mc.P, nt) || []));
+  }
   st.assign = null; render();
 }
 function moveDone(tx, i) { A.moneyMoveDone(String(tx), String(i)); render(); }
@@ -2020,7 +2076,7 @@ window.refresh = function () {
   if (st.tab === 'cams' || st.tab === 'map' || (st.tab === 'rec' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'dex' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  if (st.tab === 'money' && (st.assign != null || st.bill || st.xfer || (document.activeElement && document.activeElement.tagName === 'INPUT'))) return;
+  if (st.tab === 'money' && (st.assign != null || st.bill || st.xfer || st.mix || (document.activeElement && document.activeElement.tagName === 'INPUT'))) return;
   render();
 };
 window.onUpdateInfo = function (info) { st.update = info; if (st.tab === 'home') render(); };
@@ -2056,7 +2112,8 @@ function mockMoney() {
     txs: [
       { id: 3, ts: now - 2 * H, kind: 'out', amount: 5900, balance: 33359, party: '씨유서초청동점', target: 'cat:편의점', status: 'auto' },
       { id: 2, ts: now - 5 * H, kind: 'out', amount: 12000, balance: 39259, party: '카카오페이', target: 'cat:기타', status: 'ask' },
-      { id: 1, ts: now - 9 * H, kind: 'in', amount: 98500, balance: 51259, party: '디비 익일', target: 'income', status: 'auto' }
+      { id: 1, ts: now - 9 * H, kind: 'in', amount: 98500, balance: 51259, party: '디비 익일', target: 'income', status: 'auto' },
+      { id: 4, ts: now - 1 * H, kind: 'in', amount: 100000, balance: 133359, party: '김민수', target: 'in:free', status: 'ask' }
     ],
     potLog: [{ id: 1, ts: now - 30 * H, pot: 'fixed', amount: 60000, note: '새마을금고에서 옮김', tx: null }, { id: 2, ts: now - 28 * H, pot: 'cash', amount: 5000, note: '저축 퀘스트', tx: null }],
     plans: [], planned: [], bank: { balance: 33359, ts: now - 2 * H }
@@ -2072,6 +2129,7 @@ function mockMoney() {
     moneyTransfer: (f, t, a, n) => { addPot(f, -a, n); addPot(t, +a, n); },
     moneyLoan: (f, t, a, n) => { M.loans.push({ id: M.loans.length + 1, ts: Date.now(), from: f, to: t, amount: +a, note: n }); addPot(f, -a, '대출 · ' + n); addPot(t, +a, '대출 · ' + n); },
     moneyLoanDelete: id => { M.loans = M.loans.filter(l => l.id !== +id); },
+    moneyReplan: (tx, j) => { M.plans = M.plans.filter(p => p.tx !== +tx); if (M.planned.indexOf(+tx) < 0) M.planned.push(+tx); M.plans.push({ tx: +tx, moves: JSON.parse(j) }); },
     moneyCheckDone: () => { M.lastCheck = key(workDate(Date.now())); },
     moneyListener: () => !window._mmNoListener, moneyOpenListener: () => {},
     moneySettings: j => Object.assign(M.settings, JSON.parse(j)),

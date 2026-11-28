@@ -377,13 +377,13 @@ object Money {
             when {
                 INCOME_RX.containsMatchIn(p.party) -> { target = "income"; status = "auto" }
                 mapped != null && mapped.second -> { target = mapped.first; status = "auto" }
-                mapped != null && mapped.first.startsWith("potback:") -> { target = mapped.first; status = "ask" }
-                POT_HINT_RX.containsMatchIn(p.party) -> { target = "etcin"; status = "ask" }
-                else -> { target = "etcin"; status = "auto" }
+                mapped != null && (mapped.first.startsWith("potback:") || mapped.first.startsWith("in:")) -> { target = mapped.first; status = "ask" }
+                else -> { target = "in:free"; status = "ask" }
             }
         } else {
             val pot = matchPendingMove(ctx, p.amount)
             when {
+                pot == null && passPending(d, p.amount) -> { target = "out:pass"; status = "auto" }
                 pot != null -> {
                     target = "pot:$pot"; status = "auto"
                     if (mapped == null || !mapped.second) learn(d, p.party, "pot:$pot", false)
@@ -403,6 +403,7 @@ object Money {
         d.update("bank_tx", cv, "id=?", arrayOf(id.toString()))
         applyTarget(ctx, id, target, status)
         if (p.kind == "in" && target == "income") notifyIncome(ctx, p.amount)
+        else if (p.kind == "in" && status == "ask") notifyIncome(ctx, p.amount, p.party)
     }
 
     /** 분류에 따라 금고 기록을 맞춤 (기존 기록은 지우고 다시) */
@@ -448,6 +449,15 @@ object Money {
         }
     }
 
+    /** '바로 나갈 돈'으로 받은 금액과 같은 금액이 아직 안 나갔으면 true */
+    private fun passPending(d: SQLiteDatabase, amount: Int): Boolean {
+        val since = (System.currentTimeMillis() - 7 * 24 * 3600_000L).toString()
+        val a = amount.toString()
+        val ins = scalar(d, "SELECT COUNT(*) FROM bank_tx WHERE kind='in' AND target='in:pass' AND amount=? AND ts>=?", a, since)
+        val outs = scalar(d, "SELECT COUNT(*) FROM bank_tx WHERE kind='out' AND target='out:pass' AND amount=? AND ts>=?", a, since)
+        return ins > outs
+    }
+
     // ---------------- 옮기기 계획 ----------------
 
     fun savePlan(ctx: Context, txId: Long, json: String) {
@@ -456,9 +466,16 @@ object Money {
         db(ctx).insertWithOnConflict("plans", null, cv, SQLiteDatabase.CONFLICT_IGNORE)
     }
 
+    /** 기타 입금 처리를 바꿨을 때 계획을 새로 씀 */
+    fun replan(ctx: Context, txId: Long, json: String) {
+        val cv = ContentValues()
+        cv.put("tx_id", txId); cv.put("json", json)
+        db(ctx).insertWithOnConflict("plans", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
     private fun recentPlans(d: SQLiteDatabase): List<Pair<Long, JSONArray>> {
         val out = ArrayList<Pair<Long, JSONArray>>()
-        val since = System.currentTimeMillis() - 3 * 24 * 3600_000L
+        val since = System.currentTimeMillis() - 7 * 24 * 3600_000L
         d.rawQuery("SELECT p.tx_id, p.json FROM plans p JOIN bank_tx t ON t.id = p.tx_id WHERE t.ts >= ? ORDER BY t.ts", arrayOf(since.toString())).use { c ->
             while (c.moveToNext()) try { out.add(Pair(c.getLong(0), JSONArray(c.getString(1)))) } catch (e: Exception) {}
         }
@@ -554,7 +571,7 @@ object Money {
 
     // ---------------- 알림 ----------------
 
-    private fun notifyIncome(ctx: Context, amount: Int) {
+    private fun notifyIncome(ctx: Context, amount: Int, other: String? = null) {
         try {
             val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
             if (nm.getNotificationChannel(CHANNEL) == null) {
@@ -564,12 +581,12 @@ object Money {
             val pi = PendingIntent.getActivity(ctx, 77, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = android.app.Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_r)
-                .setContentTitle("정산 ${"%,d".format(amount)}원 들어왔어요")
-                .setContentText("눌러서 금고별로 나눠 담을 금액을 확인하세요")
+                .setContentTitle(if (other == null) "정산 ${"%,d".format(amount)}원 들어왔어요" else "입금 ${"%,d".format(amount)}원 · ${other.ifBlank { "기타" }}")
+                .setContentText(if (other == null) "눌러서 금고별로 나눠 담을 금액을 확인하세요" else "어떻게 쓸지 골라 주세요 (내 돈 · 금고 · 빚 갚기 · 논외)")
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build()
-            nm.notify(7701, n)
+            nm.notify(if (other == null) 7701 else 7702, n)
         } catch (e: Exception) {
         }
     }
