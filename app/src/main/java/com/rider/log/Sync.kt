@@ -137,6 +137,12 @@ object Sync {
             if (put(ctx, repo, token, "capture/$name.jsonl.gz", bos.toByteArray(), hashOf = f.readBytes())) uploaded++
         }
 
+        // 게임 상태 (레벨, 퀘스트, 금고)
+        try {
+            if (put(ctx, repo, token, "game.json", JSONObject(Game.stateJson(ctx)).toString(1).toByteArray())) uploaded++
+        } catch (e: Exception) {
+        }
+
         // 후면 카메라 목록
         if (put(ctx, repo, token, "cameras.json", db.camerasJson().toByteArray())) uploaded++
 

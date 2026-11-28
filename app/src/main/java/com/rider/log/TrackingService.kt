@@ -132,6 +132,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
             reloadCameras()
             startLocation()
             main.postDelayed(syncTick, 15 * 60_000L)
+            main.postDelayed(gameTick, 60_000L)
             if (overlayEnabled(this)) showBar()
         }
         return START_STICKY
@@ -140,6 +141,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
     override fun onDestroy() {
         instance = null
         main.removeCallbacks(syncTick)
+        main.removeCallbacks(gameTick)
         alerter?.shutdown()
         alerter = null
         cleanup()
@@ -159,6 +161,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
     private fun finishShift() {
         instance = null
         main.removeCallbacks(syncTick)
+        main.removeCallbacks(gameTick)
         Sync.runAsync(this) // 운행 종료 시 마지막 업로드
         alerter?.shutdown()
         alerter = null
@@ -267,6 +270,29 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
             val n = if (type == "OFFER" || type == "ACCEPT" || type == "REJECT") listOfNotNull(store, note).joinToString(" · ").ifEmpty { null } else note
             db.addAutoEvent(shiftId, ts, type, loc?.latitude, loc?.longitude, storeId, amount, n, addr)
             updateHandle()
+            if (type != "OFFER") gameCheck()
+        }
+    }
+
+    /** 퀘스트·레벨 확인 후 달성하면 음성으로 축하 */
+    private fun gameCheck() {
+        Thread {
+            try {
+                val msgs = Game.update(this)
+                if (msgs.isNotEmpty()) main.post {
+                    alerter?.chime()
+                    main.postDelayed({ alerter?.speak(msgs.joinToString(" ")) }, 700)
+                }
+            } catch (e: Exception) {
+            }
+        }.start()
+    }
+
+    private val gameTick: Runnable = object : Runnable {
+        override fun run() {
+            if (!running) return
+            gameCheck() // 주행 거리·새 구역 퀘스트용
+            main.postDelayed(this, 5 * 60_000L)
         }
     }
 
@@ -288,6 +314,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
         var alerted = false
         var minDist = Double.MAX_VALUE
         var lastExit = 0L
+        var speedAtMin = 0f
     }
 
     private val camStates = HashMap<Long, CamState>()
@@ -359,11 +386,20 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
                     alerter?.speak("전방에 후면단속 카메라가 있습니다.")
                 }
             } else {
-                if (d < st.minDist) st.minDist = d
+                if (d < st.minDist) {
+                    st.minDist = d
+                    st.speedAtMin = if (loc.hasSpeed()) loc.speed else 0f
+                }
                 val behind = h != null && angleDiff(loc.bearingTo(target), h) > 100f
                 if ((behind && d > 20) || d > st.minDist + 80 || d > 400) {
                     st.alerted = false
                     st.lastExit = now
+                    // 카메라 앞을 지날 때 속도가 제한속도 이내였는지 기록 (퀘스트용)
+                    if (st.minDist < 60 && c.speed > 0) {
+                        val kmh = st.speedAtMin * 3.6
+                        db.addAutoEvent(shiftId, now, "CAMPASS", loc.latitude, loc.longitude, null, kmh.toInt(), if (kmh <= c.speed + 2) "safe" else "over")
+                        gameCheck()
+                    }
                     st.minDist = Double.MAX_VALUE
                     if (now - lastChimeTs > 3000) {
                         lastChimeTs = now
@@ -528,6 +564,7 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
             "DELIVER" -> {
                 toast("배달 완료")
                 askAmount(id)
+                main.postDelayed({ gameCheck() }, 16000)
             }
             else -> toast(label(type))
         }

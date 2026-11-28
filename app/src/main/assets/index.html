@@ -116,6 +116,35 @@
   .step .no { width: 22px; height: 22px; border-radius: 50%; background: var(--card2); color: var(--sub); font-size: 12px; font-weight: 800; display: grid; place-items: center; flex: none; }
   .step .no.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
   .update { background: var(--accbg); border: 1px solid color-mix(in srgb, var(--acc) 35%, transparent); }
+  .game { background: linear-gradient(135deg, #1B2130, #0B0E15); color: #F5F7FA; border: 0 !important; position: relative; overflow: hidden; }
+  .game:after { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(255,122,42,.35), transparent 70%); }
+  .lvbadge { width: 58px; height: 58px; border-radius: 18px; background: linear-gradient(135deg, #FFA041, #FF4F1A); display: grid; place-items: center; font-weight: 900; color: #fff; line-height: 1; text-align: center; flex: none; box-shadow: 0 6px 18px rgba(255,90,30,.35); }
+  .lvbadge small { display: block; font-size: 10px; font-weight: 800; opacity: .9; }
+  .lvbadge b { font-size: 22px; }
+  .xpbar { height: 10px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
+  .xpbar i { display: block; height: 100%; background: linear-gradient(90deg, #FFA041, #FF4F1A); border-radius: 99px; }
+  .chips { display: flex; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
+  .chip { flex: 1; background: rgba(255,255,255,.08); border-radius: 12px; padding: 9px 10px; border: 0; color: #F5F7FA; text-align: left; }
+  .chip .k { font-size: 11px; opacity: .7; } .chip .v { font-size: 15px; font-weight: 800; margin-top: 2px; }
+  .quest { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .quest:last-child { border-bottom: 0; }
+  .qicon { width: 36px; height: 36px; border-radius: 11px; background: var(--card2); display: grid; place-items: center; font-size: 18px; flex: none; }
+  .quest.done .qicon { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+  .qbar { height: 6px; border-radius: 99px; background: var(--card2); overflow: hidden; margin-top: 6px; }
+  .qbar i { display: block; height: 100%; background: var(--acc); border-radius: 99px; }
+  .quest.done .qbar i { background: var(--ok); }
+  .reward { font-size: 11px; font-weight: 800; color: var(--acc); background: var(--accbg); padding: 4px 7px; border-radius: 7px; white-space: nowrap; }
+  .quest.done .reward { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; display: grid; place-items: center; animation: fadein .25s; }
+  .modal .box { background: linear-gradient(135deg, #1B2130, #0B0E15); color: #fff; border-radius: 24px; padding: 30px 26px; text-align: center; width: 78%; animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+  .modal .big-lv { font-size: 64px; font-weight: 900; background: linear-gradient(135deg, #FFC27A, #FF4F1A); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1.1; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
+  .dex { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .dexc { background: var(--card2); border-radius: 12px; padding: 11px; border: 1px solid var(--line); }
+  .dexc .nm { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tier { font-size: 10px; font-weight: 900; padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 6px; }
+  .t1 { background: #A0522D33; color: #C47A4A; } .t2 { background: #94A3B833; color: #94A3B8; } .t3 { background: #EAB30833; color: #EAB308; } .t4 { background: #22D3EE33; color: #22D3EE; }
   a { color: var(--acc); }
 </style>
 </head>
@@ -275,6 +304,103 @@ function hourChart(s, title) {
   return html;
 }
 
+/* ================= 게임 ================= */
+const QICON = {"DELIVERIES": "📦", "INCOME": "💰", "NEW_STORES": "🆕", "DISTINCT": "🏪", "REPEAT": "🔁", "STREAK": "🔥", "PEAK": "🌆", "LATE": "🌙", "KM": "🛵", "CELLS": "🗺️", "READY": "🍱", "RARE": "💎", "AREA": "📍", "CAMSAFE": "🛡️"};
+function gameCard() {
+  if (!A.getGame) return '';
+  const g = JSON.parse(A.getGame());
+  st.game = g;
+  const pctx = Math.min(100, g.cur / g.need * 100);
+  let h = '<div class="card game"><div class="row" style="gap:14px;position:relative;z-index:1"><div class="lvbadge"><div><small>Lv</small><b>' + g.level + '</b></div></div>' +
+    '<div style="flex:1;min-width:0"><div style="font-size:12px;opacity:.7">' + esc(g.title) + '</div><div style="font-size:18px;font-weight:900;letter-spacing:-.5px">레벨 ' + g.level + '</div>' +
+    '<div class="xpbar"><i style="width:' + pctx.toFixed(1) + '%"></i></div><div style="font-size:11px;opacity:.7;margin-top:5px">' + num(g.cur) + ' / ' + num(g.need) + ' XP · 다음 레벨까지 ' + num(g.need - g.cur) + '</div></div></div>' +
+    '<div class="chips"><button class="chip" onclick="setTab(\'explore\')"><div class="k">🗺️ 동네 정복</div><div class="v">' + g.explore.visited + '칸</div></button>' +
+    '<button class="chip" onclick="setTab(\'dex\')"><div class="k">📖 가게 도감</div><div class="v">' + g.dex + '곳</div></button>' +
+    '<button class="chip" onclick="setTab(\'vault\')"><div class="k">🪙 보상 금고</div><div class="v">' + num(g.vault.pending) + '원</div></button></div></div>';
+  h += '<div class="card"><div class="row between" style="margin-bottom:2px"><h2 style="margin:0">오늘의 퀘스트</h2><span class="muted" style="font-size:12px">완료 시 +3,000원 · +3,000 XP</span></div>';
+  for (const q of g.quests) {
+    const p = Math.min(1, q.progress / q.target);
+    h += '<div class="quest' + (q.done ? ' done' : '') + '"><div class="qicon">' + (q.done ? '✅' : (QICON[q.kind] || '⭐')) + '</div><div style="flex:1;min-width:0"><div class="row between"><b style="font-size:14px">' + esc(q.title) + '</b><span class="reward">' + (q.done ? '완료' : '+3,000') + '</span></div>' +
+      '<div class="qbar"><i style="width:' + (p * 100).toFixed(0) + '%"></i></div><div class="muted" style="font-size:11px;margin-top:3px">' + (q.kind === 'INCOME' ? num(Math.min(q.progress, q.target)) + ' / ' + num(q.target) + '원' : Math.min(q.progress, q.target) + ' / ' + q.target) + '</div></div></div>';
+  }
+  if (!g.quests.length) h += '<div class="empty">퀘스트를 준비하고 있어요</div>';
+  h += '</div>';
+  levelUpCheck(g);
+  return h;
+}
+function levelUpCheck(g) {
+  let seen = Number(localStorage.getItem('lvSeen') || 0);
+  if (!seen) { localStorage.setItem('lvSeen', g.level); return; }
+  if (g.level > seen) {
+    localStorage.setItem('lvSeen', g.level);
+    setTimeout(() => {
+      const m = document.createElement('div'); m.className = 'modal';
+      m.innerHTML = '<div class="box"><div style="font-weight:800;letter-spacing:3px;opacity:.8">LEVEL UP</div><div class="big-lv">Lv ' + g.level + '</div><div style="font-size:18px;font-weight:800;margin-top:6px">' + esc(g.title) + '</div>' +
+        (g.level % 10 === 0 ? '<div style="margin-top:14px;color:#FFC27A;font-weight:800">🎟️ 조기 퇴근권 획득!</div>' : '') + '<div style="margin-top:18px;opacity:.6;font-size:13px">눌러서 닫기</div></div>';
+      m.onclick = () => m.remove(); document.body.appendChild(m);
+    }, 300);
+  }
+}
+function renderVault() {
+  const g = st.game || JSON.parse(A.getGame());
+  const unused = g.tickets.filter(t => !t.used);
+  const nextLv = Math.ceil((g.level + 1) / 10) * 10;
+  let h = '<div class="card game"><div style="position:relative;z-index:1"><div style="font-size:12px;opacity:.7">🪙 보상 금고 · 이체 대기</div><div style="font-size:34px;font-weight:900;letter-spacing:-1px">' + num(g.vault.pending) + '원</div>' +
+    '<div style="font-size:12px;opacity:.7;margin-top:4px">누적 적립 ' + num(g.vault.total) + '원 · 이체 완료 ' + num(g.vault.paid) + '원 · 깬 퀘스트 ' + g.questsDone + '개</div>' +
+    (g.vault.pending > 0 ? '<button class="btn pri" style="margin-top:14px" onclick="vaultPaid(' + g.vault.pending + ')">토스 저금통으로 이체했어요</button>' : '') + '</div></div>';
+  h += '<div class="muted" style="margin:0 4px 12px">퀘스트 하나를 깰 때마다 3,000원이 쌓여요. 쌓인 돈은 따로 떼어 둔 통장(예: 토스 저금통)으로 옮기고 위 버튼을 누르세요. 그 돈은 게임 아이템이든 장비든 죄책감 없이 쓰는 돈이에요.</div>';
+  h += '<div class="card"><h2>🎟️ 조기 퇴근권 ' + unused.length + '장</h2>';
+  h += '<div class="muted" style="margin-bottom:8px">10레벨마다 1장, 한 달에 퀘스트 60개를 깨면 1장. 다음: Lv ' + nextLv + ' · 이번 달 퀘스트 ' + g.monthDone + '/60</div>';
+  for (const t of g.tickets) {
+    h += '<div class="store"><div><div class="nm">' + esc(t.source) + '</div><div class="muted">' + new Date(t.ts).toLocaleDateString('ko-KR') + (t.used ? ' · ' + new Date(t.used).toLocaleDateString('ko-KR') + ' 사용' : '') + '</div></div>' +
+      (t.used ? '<span class="badge b-na">사용함</span>' : '<button class="btn pri" onclick="useTicket(' + t.id + ')">사용</button>') + '</div>';
+  }
+  if (!g.tickets.length) h += '<div class="empty">아직 없어요. 장기 목표를 달성하면 생겨요.</div>';
+  return h + '</div>';
+}
+function vaultPaid(n) { if (confirm(num(n) + '원을 이체했나요?')) { A.vaultWithdraw(String(n)); st.game = null; render(); } }
+function useTicket(id) { if (confirm('조기 퇴근권을 사용할까요? 오늘은 마음 편히 일찍 들어가세요!')) { A.useTicket(String(id)); st.game = null; render(); } }
+function renderExplore() {
+  const g = st.game || JSON.parse(A.getGame());
+  const pct = (g.explore.visited / g.explore.total * 100).toFixed(1);
+  let h = '<div class="card game"><div style="position:relative;z-index:1"><div style="font-size:12px;opacity:.7">🗺️ 강남·서초 일대 정복률</div><div style="font-size:34px;font-weight:900;letter-spacing:-1px">' + pct + '%</div>' +
+    '<div style="font-size:12px;opacity:.7;margin-top:4px">밝힌 구역 ' + num(g.explore.visited) + ' / ' + num(g.explore.total) + '칸 · 오늘 새로 ' + g.explore.today + '칸</div></div></div>';
+  h += '<div class="card" style="padding:10px"><div id="expmap" style="height:62vh;border-radius:12px;display:grid;place-items:center;color:var(--sub);font-size:13px">지도 불러오는 중…</div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">한 칸은 약 300m예요. 지나간 칸이 밝혀지고, 오늘 처음 밝힌 칸은 더 진하게 보여요. 산이나 강처럼 못 가는 칸도 포함돼 있어서 100%는 어려워요.</div></div>';
+  setTimeout(drawExplore, 0);
+  return h;
+}
+function drawExplore() {
+  const box = document.getElementById('expmap');
+  if (!box) return;
+  const c = JSON.parse(A.getCells());
+  loadNaver(() => {
+    box.innerHTML = '';
+    const map = new naver.maps.Map(box, { center: LL(37.495, 127.04), zoom: 12, scaleControl: false, mapDataControl: false });
+    const b = new naver.maps.LatLngBounds(LL(c.lat0, c.lng0), LL(c.lat0 + c.rows * c.dlat, c.lng0 + c.cols * c.dlng));
+    new naver.maps.Rectangle({ map, bounds: b, strokeColor: '#0B0E15', strokeWeight: 2, strokeStyle: 'dash', fillColor: '#0B0E15', fillOpacity: 0.28, clickable: false });
+    for (const [i, j, today] of c.cells) {
+      const sw = LL(c.lat0 + i * c.dlat, c.lng0 + j * c.dlng), ne = LL(c.lat0 + (i + 1) * c.dlat, c.lng0 + (j + 1) * c.dlng);
+      new naver.maps.Rectangle({ map, bounds: new naver.maps.LatLngBounds(sw, ne), strokeWeight: 0, fillColor: today ? '#FF4F1A' : '#FFA041', fillOpacity: today ? 0.6 : 0.4, clickable: false });
+    }
+  }, why => mapFail(box, why));
+}
+function dexTier(v) { return v >= 30 ? ['t4', '다이아'] : v >= 10 ? ['t3', '골드'] : v >= 3 ? ['t2', '실버'] : ['t1', '브론즈']; }
+function dexRank(n) { const r = [[1000, '전설의 도감'], [300, '강남·서초 백과사전'], [100, '미식 지도 제작자'], [30, '맛집 탐험가'], [10, '수집가 입문'], [0, '빈 도감']]; return r.find(x => n >= x[0]); }
+function renderDex() {
+  const list = JSON.parse(A.getDex());
+  const rank = dexRank(list.length), steps = [10, 30, 100, 300, 1000], next = steps.find(x => x > list.length);
+  let h = '<div class="card game"><div style="position:relative;z-index:1"><div style="font-size:12px;opacity:.7">📖 가게 도감 · ' + rank[1] + '</div><div style="font-size:34px;font-weight:900;letter-spacing:-1px">' + list.length + '곳 수집</div>' +
+    '<div style="font-size:12px;opacity:.7;margin-top:4px">' + (next ? '다음 등급까지 ' + (next - list.length) + '곳' : '최고 등급 달성!') + ' · 방문 3회 실버 · 10회 골드 · 30회 다이아</div></div></div>';
+  h += '<div class="card"><div class="dex">';
+  for (const sx of list.slice().reverse()) {
+    const t = dexTier(sx.visits);
+    h += '<div class="dexc"><div class="nm">' + esc(sx.name) + '</div><div class="muted" style="font-size:11px">' + sx.visits + '회 · ' + new Date(sx.first).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 첫 방문</div><span class="tier ' + t[0] + '">' + t[1] + '</span></div>';
+  }
+  if (!list.length) h += '<div class="empty" style="grid-column:1/3">배달하면서 가게를 방문하면 여기에 모여요</div>';
+  return h + '</div></div>';
+}
+
 /* ================= 화면: 홈 ================= */
 const CHEV = '<svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
 function renderHome() {
@@ -285,10 +411,12 @@ function renderHome() {
   const s = stats(data, f, f + DAY);
   let h = '';
   const u = st.update;
+  const gameHtml = gameCard();
   if (u && u.available) {
     h += '<div class="card update"><div class="row between"><div><b>새 버전이 있어요</b><div class="muted">v' + u.current + ' → v' + u.latest + (running ? ' · 운행 종료 후 업데이트하세요' : '') + '</div></div>' +
       (running ? '' : '<button class="btn pri" onclick="A.installUpdate()">업데이트</button>') + '</div></div>';
   }
+  h += gameHtml;
   h += '<div class="card">';
   if (running) {
     h += '<div class="row between" style="margin-bottom:12px"><div><div class="muted">운행 중 · ' + clock(startTs) + ' 시작</div><div style="font-size:26px;font-weight:800;letter-spacing:-0.8px">' + hm(Date.now() - startTs) + '</div></div></div>';
@@ -555,7 +683,7 @@ function renderDay() {
   }
   h += '<div class="card"><div class="row between"><h2 style="margin:0">하루 이동 경로</h2><button class="btn" onclick="showMap()">지도 보기</button></div><div id="mapbox"></div></div>';
   h += '<div class="card"><h2>기록 순서</h2><ul class="tl">';
-  for (const e of data.events) {
+  for (const e of data.events.filter(x => x.type !== 'CAMPASS')) {
     const name = storeName(data, e.store);
     let detail = name ? esc(name) : '';
     let meta = '';
@@ -796,7 +924,7 @@ function renameStore(id) {
 }
 
 /* ================= 공통 ================= */
-function setTab(t) { if (t !== 'day') st.trip = null; st.tab = t; render(); window.scrollTo(0, 0); }
+function setTab(t) { if (t !== 'day') st.trip = null; if (t === 'home') st.game = null; st.tab = t; render(); window.scrollTo(0, 0); }
 function render() {
   applyThemeClass();
   const running = A.isRunning();
@@ -805,7 +933,7 @@ function render() {
   pill.innerHTML = '<span class="dot"></span>' + (running ? '운행 중' : '대기');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
   document.getElementById('setbtn').classList.toggle('on', st.tab === 'settings' || st.tab === 'cams');
-  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings, cams: renderCams }[st.tab];
+  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings, cams: renderCams, explore: renderExplore, dex: renderDex, vault: renderVault }[st.tab];
   try {
     document.getElementById('view').innerHTML = fn();
   } catch (e) {
@@ -813,7 +941,7 @@ function render() {
   }
 }
 window.refresh = function () {
-  if (st.tab === 'cams' || (st.tab === 'day' && st.trip != null)) return;
+  if (st.tab === 'cams' || st.tab === 'explore' || (st.tab === 'day' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'stores' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   render();
@@ -873,7 +1001,7 @@ function makeMock() {
     exportAll: () => alert('미리보기에서는 내보내기가 없어요'),
     openBatterySettings: () => alert('미리보기'),
     captureStatus: () => JSON.stringify({ enabled: true, on: true, count: 1284, bytes: 3456789, apps: [{ pkg: 'com.woowahan.bros', label: '배민커넥트', on: true }] }),
-    version: () => '3', getSync: () => JSON.stringify({ repo: 'ko123tp-collab/riderlog-data', hasToken: true, last: Date.now(), status: '3개 파일 업로드', ok: true }), setSync: () => {}, syncNow: () => {}, getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
+    version: () => '3', getGame: () => JSON.stringify({ xp: 512340, level: 10, cur: 44340, need: 92000, title: '골목대장', quests: [{ title: '처음 가 보는 가게 3곳 방문', progress: 1, target: 3, done: false, kind: 'NEW_STORES' }, { title: '저녁 피크(18~21시)에 6건 완료', progress: 6, target: 6, done: true, kind: 'PEAK' }, { title: '오늘의 탐방: 방배동 들르기', progress: 0, target: 1, done: false, kind: 'AREA' }], vault: { total: 15000, paid: 6000, pending: 9000 }, questsDone: 5, monthDone: 5, tickets: [{ id: 1, ts: Date.now(), source: '레벨 10 달성', used: null }], explore: { visited: 214, total: 1428, today: 6 }, dex: 37 }), getCells: () => JSON.stringify({ lat0: 37.445, lng0: 126.975, dlat: 0.002695, dlng: 0.003396, rows: 34, cols: 42, cells: [[10, 12, 0], [10, 13, 1]] }), getDex: () => JSON.stringify([{ id: 1, name: '양재동김밥', visits: 12, first: Date.now() - 9e8, last: Date.now() }, { id: 2, name: '교촌치킨 역삼점', visits: 4, first: Date.now() - 5e8, last: Date.now() }, { id: 3, name: '본죽 도곡점', visits: 1, first: Date.now(), last: Date.now() }]), vaultWithdraw: () => {}, useTicket: () => {}, getSync: () => JSON.stringify({ repo: 'ko123tp-collab/riderlog-data', hasToken: true, last: Date.now(), status: '3개 파일 업로드', ok: true }), setSync: () => {}, syncNow: () => {}, getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
     setCaptureOn: () => {}, setCaptureApp: () => {}, openAccessibilitySettings: () => {}, openAppInfo: () => {}, exportCapture: () => {}, clearCapture: () => {}
   };
 }

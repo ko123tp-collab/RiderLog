@@ -371,6 +371,27 @@ class MainActivity : Activity() {
             }
         }
 
+        // ---------- 게임 ----------
+
+        @JavascriptInterface
+        fun getGame(): String = Game.stateJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getCells(): String = Game.cellsJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getDex(): String = Game.dexJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun vaultWithdraw(amount: String) {
+            Game.withdraw(this@MainActivity, amount.filter { it.isDigit() }.toIntOrNull() ?: 0)
+        }
+
+        @JavascriptInterface
+        fun useTicket(id: String) {
+            Game.useTicket(this@MainActivity, id.toLong())
+        }
+
         // ---------- 서버(GitHub) 동기화 ----------
 
         @JavascriptInterface
