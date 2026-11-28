@@ -364,11 +364,13 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun setAmount(id: String, amount: String) {
             db.setAmount(id.toLong(), amount.filter { it.isDigit() }.toIntOrNull())
+            Atlas.invalidate(this@MainActivity)
         }
 
         @JavascriptInterface
         fun deleteEvent(id: String) {
             db.deleteEvent(id.toLong())
+            Atlas.invalidate(this@MainActivity)
         }
 
         @JavascriptInterface
@@ -417,6 +419,33 @@ class MainActivity : Activity() {
         fun vaultWithdraw(amount: String) {
             Game.withdraw(this@MainActivity, amount.filter { it.isDigit() }.toIntOrNull() ?: 0)
         }
+
+        @JavascriptInterface
+        fun vaultSpend(amount: String, note: String) {
+            Game.withdraw(this@MainActivity, amount.filter { it.isDigit() }.toIntOrNull() ?: 0, note.ifBlank { "사용" })
+        }
+
+        // ----- 지도·도감 -----
+        @JavascriptInterface
+        fun getAtlas(): String = assets.open("atlas/atlas.json").bufferedReader().use { it.readText() }
+
+        @JavascriptInterface
+        fun getMap(): String = Atlas.mapJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getRegions(): String = Atlas.regionJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getStoreDex(): String = Atlas.storesJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getRecords(): String = Atlas.recordsJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun getProfile(): String = Atlas.profileJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun mergeStores(from: String, into: String) = Atlas.mergeStores(this@MainActivity, from.toLong(), into.toLong())
 
         @JavascriptInterface
         fun useTicket(id: String) {

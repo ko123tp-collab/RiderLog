@@ -30,6 +30,8 @@ var RPG = (function () {
     crit: { name: '급소 찌르기', desc: '치명타 확률', base: 50, growth: 1.16, max: 40 },
     haste: { name: '신속', desc: '공격 속도', base: 60, growth: 1.17, max: 30 }
   };
+  // 라이더 능력치 보너스 (탐험가·숙련자·상인·모험가), 화면에서 채워 넣음
+  var buffs = { atk: 0, gold: 0, cost: 0, critD: 0 };
   var KILLS_PER_STAGE = 15, BOSS_LIMIT = 35, WALK = 0.9, SKILL_CD = 8, BOSS_MULT = 10, GATE = 4;
   // 성장 곡선 수치 (시뮬레이션으로 맞춘 값)
   var P = { goldBase: 2, goldG: 1.02, wPer: 1.06, cg: 1.09, fPer: 1.03, lvExp: 1.6 };
@@ -43,9 +45,9 @@ var RPG = (function () {
   }
   function stats(st, lv) {
     var c = CLASSES[cls(lv)];
-    var atk = 5 * Math.pow(lv + 2, P.lvExp) * c.mult * Math.pow(P.wPer, st.eq.weapon) * Math.pow(P.fPer, st.sk.focus);
+    var atk = 5 * Math.pow(lv + 2, P.lvExp) * c.mult * Math.pow(P.wPer, st.eq.weapon) * Math.pow(P.fPer, st.sk.focus) * (1 + buffs.atk);
     var critC = Math.min(0.6, 0.10 + 0.0125 * st.sk.crit);
-    var critD = 2 + EQUIP.glove.per * st.eq.glove;
+    var critD = 2 + EQUIP.glove.per * st.eq.glove + buffs.critD;
     var interval = 0.7 / (1 + 0.04 * st.sk.haste);
     var skillMult = 3 + 0.4 * st.sk.whirl;
     var avg = atk * (1 + critC * (critD - 1));
@@ -54,14 +56,14 @@ var RPG = (function () {
   }
   function hp(g) { var n = HP.length; if (!n) return 60 * Math.pow(1.1, g); return g < n ? HP[g] : HP[n - 1] * Math.pow(HP[n - 1] / HP[n - 11], (g - n + 1) / 10); }
   function bossHp(g) { return hp(g) * BOSS_MULT; }
-  function gold(g, st) { return P.goldBase * Math.pow(P.goldG, g) * (1 + EQUIP.ring.per * st.eq.ring); }
+  function gold(g, st) { return P.goldBase * Math.pow(P.goldG, g) * (1 + EQUIP.ring.per * st.eq.ring) * (1 + buffs.gold); }
   function isBoss(g) { return g % 10 === 9; }
   function where(g) { var b = Math.floor(g / 10); return { biome: b % BIOMES.length, stage: g % 10 + 1, loop: Math.floor(b / BIOMES.length) + 1, label: (b % BIOMES.length + 1) + '-' + (g % 10 + 1) }; }
   // 다음 스테이지로 넘어가는 데 필요한 초당 피해량
   function needDps(g) { return isBoss(g) ? bossHp(g) / BOSS_LIMIT : hp(g + 1) / GATE; }
   function canAdvance(g, dps) { return dps >= needDps(g); }
   function needPower(g) { return Math.round(needDps(g) * 10); }
-  function eqCost(k, lv) { return Math.round(EQUIP[k].base * Math.pow(P.cg, lv)); }
+  function eqCost(k, lv) { return Math.round(EQUIP[k].base * Math.pow(P.cg, lv) * (1 - buffs.cost)); }
   function skCost(k, lv) { return Math.round(SKILLS[k].base * Math.pow(SKILLS[k].growth, lv)); }
 
   // 오프라인 사냥 계산: sec 초 동안 사냥. lv 는 그 구간의 레벨.
@@ -144,7 +146,7 @@ var RPG = (function () {
     }
     return n;
   }
-  return { P: P, HP: HP, CLASSES: CLASSES, BIOMES: BIOMES, EQUIP: EQUIP, SKILLS: SKILLS, KILLS_PER_STAGE: KILLS_PER_STAGE, BOSS_LIMIT: BOSS_LIMIT, SKILL_CD: SKILL_CD, WALK: WALK,
+  return { buffs: buffs, P: P, HP: HP, CLASSES: CLASSES, BIOMES: BIOMES, EQUIP: EQUIP, SKILLS: SKILLS, KILLS_PER_STAGE: KILLS_PER_STAGE, BOSS_LIMIT: BOSS_LIMIT, SKILL_CD: SKILL_CD, WALK: WALK,
     BOSS_MULT: BOSS_MULT, GATE: GATE, needDps: needDps, canAdvance: canAdvance, cls: cls, newState: newState, stats: stats, hp: hp, bossHp: bossHp, gold: gold, isBoss: isBoss, where: where, needPower: needPower,
     eqCost: eqCost, skCost: skCost, hunt: hunt, catchUp: catchUp, eqUp: eqUp, skUp: skUp, autoUp: autoUp };
 })();

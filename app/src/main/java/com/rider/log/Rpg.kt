@@ -56,7 +56,8 @@ object Rpg {
         }
         val fareBefore = scalar("SELECT SUM(amount) FROM events WHERE type='DELIVER' AND amount IS NOT NULL AND ts < ?", since.toString())
         val questBefore = scalar("SELECT COUNT(*) FROM quests WHERE done_ts IS NOT NULL AND done_ts < ?", since.toString())
-        o.put("xpBefore", fareBefore + questBefore * Game.QUEST_XP)
+        val bonus = Atlas.bonusXp(ctx)
+        o.put("xpBefore", fareBefore + questBefore * Game.QUEST_XP + bonus)
         val xs = JSONArray()
         d.rawQuery(
             "SELECT ts, amount FROM events WHERE type='DELIVER' AND amount IS NOT NULL AND ts >= ? " +
@@ -67,7 +68,8 @@ object Rpg {
         val fares = scalar("SELECT SUM(amount) FROM events WHERE type='DELIVER' AND amount IS NOT NULL")
         val quests = scalar("SELECT COUNT(*) FROM quests WHERE done_ts IS NOT NULL")
         o.put("bp", fares / 100 + quests * 100)
-        o.put("xp", fares + quests * Game.QUEST_XP)
+        o.put("xp", fares + quests * Game.QUEST_XP + bonus)
+        try { o.put("stats", Atlas.statsOf(ctx)) } catch (e: Exception) {}
         o.put("running", Db.get(ctx).openShiftId() != null)
         o.put("now", System.currentTimeMillis())
         return o.toString()

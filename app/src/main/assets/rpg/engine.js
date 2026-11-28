@@ -28,6 +28,7 @@ var RPGAPP = (function () {
   function readInputs(since) {
     var j = JSON.parse(A.rpgInputs(String(since)));
     lv = levelOf(j.xp); bpTotal = j.bp; running = !!j.running;
+    if (j.stats) { var L = function (k) { return j.stats[k] ? j.stats[k].level : 0; }; R.buffs.atk = 0.02 * L('veteran'); R.buffs.gold = 0.02 * L('explorer'); R.buffs.cost = 0.01 * L('merchant'); R.buffs.critD = 0.03 * L('adventurer'); }
     return j;
   }
   function save() { if (st) try { A.rpgSave(JSON.stringify(st)); } catch (e) {} }
@@ -368,7 +369,10 @@ var RPGAPP = (function () {
     el.innerHTML = h;
     var t1 = $('rpgTabEq'), t2 = $('rpgTabSk');
     if (t1) { t1.classList.toggle('on', shopTab === 'eq'); t2.classList.toggle('on', shopTab === 'sk'); }
-    $('rpgStats').innerHTML = '공격력 <b>' + fmt(s.atk) + '</b> · 치명타 <b>' + pct(s.critC) + '</b> · 치명타 피해 <b>' + pct(s.critD) + '</b> · 공격 간격 <b>' + s.interval.toFixed(2) + '초</b>';
+    var bf = R.buffs, bt = [];
+    if (bf.atk) bt.push('숙련자 공격력 +' + Math.round(bf.atk * 100) + '%'); if (bf.gold) bt.push('탐험가 골드 +' + Math.round(bf.gold * 100) + '%');
+    if (bf.cost) bt.push('상인 강화비 -' + Math.round(bf.cost * 100) + '%'); if (bf.critD) bt.push('모험가 치명타 피해 +' + Math.round(bf.critD * 100) + '%p');
+    $('rpgStats').innerHTML = (bt.length ? '<div style="margin-bottom:4px">라이더 능력치: ' + bt.join(' · ') + '</div>' : '') + '공격력 <b>' + fmt(s.atk) + '</b> · 치명타 <b>' + pct(s.critC) + '</b> · 치명타 피해 <b>' + pct(s.critD) + '</b> · 공격 간격 <b>' + s.interval.toFixed(2) + '초</b>';
   }
   function upgrade(spec) {
     var p = spec.split(':'), ok = p[0] === 'e' ? R.eqUp(st, p[1]) : R.skUp(st, p[1], bpTotal);

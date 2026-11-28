@@ -72,6 +72,7 @@ object Game {
         val w = Db.get(ctx).writableDatabase
         w.execSQL("CREATE TABLE IF NOT EXISTS quests(day TEXT NOT NULL, idx INTEGER NOT NULL, kind TEXT NOT NULL, target INTEGER NOT NULL, param TEXT, title TEXT NOT NULL, progress INTEGER NOT NULL DEFAULT 0, done_ts INTEGER, PRIMARY KEY(day, idx))")
         w.execSQL("CREATE TABLE IF NOT EXISTS vault(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, amount INTEGER NOT NULL, note TEXT)")
+        w.execSQL("CREATE TABLE IF NOT EXISTS cellvisits(cell INTEGER PRIMARY KEY, days INTEGER NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, lastday INTEGER NOT NULL)")
         w.execSQL("CREATE TABLE IF NOT EXISTS tickets(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, source TEXT NOT NULL, used_ts INTEGER)")
         return w
     }
@@ -96,7 +97,7 @@ object Game {
         val d = db(ctx)
         val fares = scalarLong(d, "SELECT SUM(amount) FROM events WHERE type='DELIVER' AND amount IS NOT NULL")
         val quests = scalarLong(d, "SELECT COUNT(*) FROM quests WHERE done_ts IS NOT NULL")
-        return fares + quests * QUEST_XP
+        return fares + quests * QUEST_XP + Atlas.bonusXp(ctx)
     }
 
     // ---------------- 퀘스트 ----------------
@@ -132,7 +133,7 @@ object Game {
         val distinct = n(6, 12)
         val streak = n(8, 15)
         val km = n(4, 8) * 10
-        val cells = n(3, 10)
+        val cells = n(8, 25)
         val ready = n(2, 4)
         val rare = n(1, 3)
         val fareTh = listOf(6000, 7000, 8000)[rnd.nextInt(3)]
@@ -147,7 +148,7 @@ object Game {
             Q("PEAK", peak, null, "저녁 피크(18~21시)에 ${peak}건 완료"),
             Q("LATE", late, null, "밤 11시 이후 ${late}건 완료"),
             Q("KM", km, null, "오늘 ${km}km 달리기"),
-            Q("CELLS", cells, null, "지도에 새 구역 ${cells}칸 밝히기"),
+            Q("CELLS", cells, null, "지도에서 새 칸 ${cells}개 밝히기"),
             Q("READY", ready, null, "음식 조리완료 상태로 도착 ${ready}번"),
             Q("RARE", rare, fareTh.toString(), "배달료 ${"%,d".format(fareTh)}원 이상 콜 ${rare}건 완료"),
             Q("AREA", 1, "${area.first}|${area.second}|${area.third}", "오늘의 탐방: ${area.first} 들르기"),
@@ -246,7 +247,7 @@ object Game {
                 for (k in km.keys()) m += km.getDouble(k)
                 (m / 1000).toInt()
             }
-            "CELLS" -> (cellsBetween(d, from, to) - beforeCells(d, from)).size
+            "CELLS" -> scalarLong(d, "SELECT COUNT(*) FROM cellvisits WHERE first>=? AND first<?", f, t).toInt()
             "READY" -> scalarLong(d, "SELECT COUNT(*) FROM events WHERE type='READY' AND ts>=? AND ts<?", f, t).toInt()
             "RARE" -> scalarLong(d, "SELECT COUNT(*) FROM events WHERE type='DELIVER' AND amount>=? AND ts>=? AND ts<?", param ?: "7000", f, t).toInt()
             "AREA" -> {
@@ -272,6 +273,7 @@ object Game {
     @Synchronized
     fun update(ctx: Context, now: Long = System.currentTimeMillis()): List<String> {
         val d = db(ctx)
+        try { Atlas.refresh(ctx) } catch (e: Exception) {}
         val day = ensureQuests(ctx, now)
         val from = dayStart(now)
         val to = from + 24 * 3600_000L
@@ -357,19 +359,28 @@ object Game {
             )
         }
         o.put("tickets", tk)
-        val before = beforeCells(d, dayStart(now))
-        val todayNew = cellsBetween(d, dayStart(now), now + 1) - before
-        o.put("explore", JSONObject().put("visited", before.size + todayNew.size).put("total", ROWS * COLS).put("today", todayNew.size))
+        val visited = scalarLong(d, "SELECT COUNT(*) FROM cellvisits")
+        val todayNew = scalarLong(d, "SELECT COUNT(*) FROM cellvisits WHERE first>=?", dayStart(now).toString())
+        o.put("explore", JSONObject().put("visited", visited).put("total", Atlas.grid(ctx).total).put("today", todayNew))
+        try { o.put("stats", Atlas.statsOf(ctx)) } catch (e: Exception) {}
+        val log = JSONArray()
+        d.rawQuery("SELECT ts, amount, note FROM vault ORDER BY id DESC LIMIT 40", null).use { c ->
+            while (c.moveToNext()) log.put(JSONObject().put("ts", c.getLong(0)).put("amount", c.getLong(1)).put("note", if (c.isNull(2)) "" else c.getString(2)))
+        }
+        o.put("vaultLog", log)
         o.put("dex", scalarLong(d, "SELECT COUNT(DISTINCT store_id) FROM events WHERE store_id IS NOT NULL AND type IN ('ARRIVE','PICKUP')"))
         return o.toString()
     }
 
-    /** 이체 완료 처리 (금고에서 빠져나간 것으로 기록) */
-    fun withdraw(ctx: Context, amount: Int) {
-        if (amount <= 0) return
+    /** 금고에서 쓰기 (잔액보다 많이는 못 씀). note 가 "초기화"면 잔액 전부 */
+    fun withdraw(ctx: Context, amount: Int, note: String = "사용") {
+        val d = db(ctx)
+        val pending = scalarLong(d, "SELECT SUM(amount) FROM vault")
+        val a = if (note == "초기화") pending.toInt() else minOf(amount.toLong(), pending).toInt()
+        if (a <= 0) return
         val cv = ContentValues()
-        cv.put("ts", System.currentTimeMillis()); cv.put("amount", -amount); cv.put("note", "이체 완료")
-        db(ctx).insert("vault", null, cv)
+        cv.put("ts", System.currentTimeMillis()); cv.put("amount", -a); cv.put("note", note.take(40))
+        d.insert("vault", null, cv)
     }
 
     fun useTicket(ctx: Context, id: Long) {
