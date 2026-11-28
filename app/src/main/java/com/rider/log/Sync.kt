@@ -143,6 +143,12 @@ object Sync {
         } catch (e: Exception) {
         }
 
+        // 가계부 (알림 원문·계좌번호는 저장하지 않음)
+        try {
+            if (put(ctx, repo, token, "money.json", Money.exportJson(ctx).toByteArray())) uploaded++
+        } catch (e: Exception) {
+        }
+
         // 후면 카메라 목록
         if (put(ctx, repo, token, "cameras.json", db.camerasJson().toByteArray())) uploaded++
 

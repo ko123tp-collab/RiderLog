@@ -278,7 +278,8 @@ class TrackingService : Service(), LocationListener, Recognizer.Sink {
     private fun gameCheck() {
         Thread {
             try {
-                val msgs = Game.update(this)
+                val msgs = ArrayList(Game.update(this))
+                try { Money.bossCheck(this)?.let { msgs.add(it) } } catch (e: Exception) {}
                 if (msgs.isNotEmpty()) main.post {
                     alerter?.chime()
                     main.postDelayed({ alerter?.speak(msgs.joinToString(" ")) }, 700)

@@ -68,6 +68,14 @@ class MainActivity : Activity() {
         val html = assets.open("index.html").bufferedReader().use { it.readText() }
         web.loadDataWithBaseURL("https://ko123tp-collab.github.io/", html, "text/html", "utf-8", null)
         if (intent?.getBooleanExtra("autostart", false) == true) main.postDelayed({ requestStart() }, 500)
+        openTabFrom(intent, 900)
+    }
+
+    /** 알림을 눌러 들어오면 해당 탭(예: 가계부)을 연다 */
+    private fun openTabFrom(i: Intent?, delay: Long) {
+        val tab = i?.getStringExtra("tab") ?: return
+        if (tab.any { !it.isLetter() }) return
+        main.postDelayed({ if (::web.isInitialized) web.evaluateJavascript("window.setTab && setTab('$tab')", null) }, delay)
     }
 
     // ---------------- 자동 업데이트 ----------------
@@ -162,6 +170,10 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra("autostart", false)) {
             requestStart()
+            return
+        }
+        if (intent.hasExtra("tab")) {
+            openTabFrom(intent, 100)
             return
         }
         if (intent.action != ACTION_INSTALL_STATUS) return
@@ -450,6 +462,79 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun useTicket(id: String) {
             Game.useTicket(this@MainActivity, id.toLong())
+        }
+
+        // ---------- 가계부 ----------
+
+        @JavascriptInterface
+        fun moneyState(): String = Money.stateJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun moneyListener(): Boolean = BankListener.isEnabled(this@MainActivity)
+
+        @JavascriptInterface
+        fun moneyOpenListener() {
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                } catch (e: Exception) {
+                    toast("설정 화면을 열 수 없어요")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun moneySettings(json: String) = Money.setSettings(this@MainActivity, json)
+
+        @JavascriptInterface
+        fun moneyBillSave(json: String): String = Money.saveBill(this@MainActivity, json).toString()
+
+        @JavascriptInterface
+        fun moneyBillDelete(id: String) = Money.deleteBill(this@MainActivity, id.toLong())
+
+        @JavascriptInterface
+        fun moneyBillPause(id: String, paused: Boolean) = Money.setPaused(this@MainActivity, id.toLong(), paused)
+
+        @JavascriptInterface
+        fun moneyBillPaid(id: String, due: String, fromPot: Boolean) = Money.billPaid(this@MainActivity, id.toLong(), due, fromPot)
+
+        @JavascriptInterface
+        fun moneyBillUnpaid(id: String, due: String) = Money.billUnpaid(this@MainActivity, id.toLong(), due)
+
+        @JavascriptInterface
+        fun moneyOff(day: String, state: String) = Money.setOff(this@MainActivity, day, state)
+
+        @JavascriptInterface
+        fun moneyPot(pot: String, amount: String, note: String) {
+            val n = amount.trim().toIntOrNull() ?: return
+            Money.addPot(this@MainActivity, pot, n, note.ifBlank { "직접 기록" })
+        }
+
+        @JavascriptInterface
+        fun moneyPotSet(pot: String, balance: String) {
+            Money.setPotBalance(this@MainActivity, pot, balance.filter { it.isDigit() }.toIntOrNull() ?: return)
+        }
+
+        @JavascriptInterface
+        fun moneyPotLogDelete(id: String) = Money.deletePotLog(this@MainActivity, id.toLong())
+
+        @JavascriptInterface
+        fun moneyAssign(id: String, target: String, remember: Boolean) = Money.assign(this@MainActivity, id.toLong(), target, remember)
+
+        @JavascriptInterface
+        fun moneySavePlan(txId: String, json: String) = Money.savePlan(this@MainActivity, txId.toLong(), json)
+
+        @JavascriptInterface
+        fun moneyMoveDone(txId: String, idx: String) = Money.moveDone(this@MainActivity, txId.toLong(), idx.toInt())
+
+        @JavascriptInterface
+        fun moneySetBoss(json: String) = Money.setBoss(this@MainActivity, json)
+
+        /** 알림 문구를 직접 붙여 넣어 기록 (알림을 놓쳤을 때) */
+        @JavascriptInterface
+        fun moneyIngest(text: String): String {
+            if (Money.parse(text) == null) return "fail"
+            return if (Money.ingest(this@MainActivity, text) > 0) "ok" else "dup"
         }
 
         // ---------- 서버(GitHub) 동기화 ----------

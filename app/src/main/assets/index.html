@@ -185,6 +185,55 @@
   .tier { font-size: 10px; font-weight: 900; padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 6px; }
   .t1 { background: #A0522D33; color: #C47A4A; } .t2 { background: #94A3B833; color: #94A3B8; } .t3 { background: #EAB30833; color: #EAB308; } .t4 { background: #22D3EE33; color: #22D3EE; }
   a { color: var(--acc); }
+  /* 가계부 */
+  .mbig { font-size: 34px; font-weight: 900; letter-spacing: -1px; line-height: 1.15; }
+  .mbar { position: relative; height: 12px; border-radius: 99px; background: var(--card2); overflow: hidden; margin-top: 10px; }
+  .game .mbar { background: rgba(255,255,255,.12); }
+  .mbar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--acc2), var(--acc)); border-radius: 99px; }
+  .mbar i.ok { background: var(--ok); }
+  .mbar i.goal { background: linear-gradient(90deg, #22C55E, #16A34A); }
+  .mbar b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55; }
+  .game .mbar b { background: #fff; }
+  .mrow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .mrow:last-child { border-bottom: 0; }
+  .mic { width: 40px; height: 40px; border-radius: 12px; background: var(--card2); display: grid; place-items: center; font-size: 19px; flex: none; }
+  .mrow .t { font-weight: 800; font-size: 14px; }
+  .mrow .s { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .mamt { font-weight: 900; font-size: 15px; white-space: nowrap; text-align: right; }
+  .dd { font-size: 11px; font-weight: 900; padding: 3px 7px; border-radius: 7px; background: var(--card2); color: var(--sub); white-space: nowrap; }
+  .dd.soon { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .dd.late { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+  .dd.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+  .thin { height: 5px; border-radius: 99px; background: var(--card2); overflow: hidden; margin-top: 6px; }
+  .thin i { display: block; height: 100%; background: var(--acc); border-radius: 99px; }
+  .thin i.full { background: var(--ok); }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal .w { text-align: center; font-size: 11px; color: var(--sub); font-weight: 800; padding: 2px 0 4px; }
+  .cal .c { min-height: 60px; border-radius: 10px; background: var(--card2); padding: 5px 4px; font-size: 12px; border: 1.5px solid transparent; overflow: hidden; }
+  .cal .c.pad { background: none; }
+  .cal .c.off { background: repeating-linear-gradient(135deg, var(--card2) 0 6px, color-mix(in srgb, var(--faint) 18%, var(--card2)) 6px 12px); color: var(--faint); }
+  .cal .c.today { border-color: var(--acc); }
+  .cal .c.past { opacity: .45; }
+  .cal .n { font-weight: 800; }
+  .cal .off .n:after { content: " 휴"; font-size: 9px; }
+  .cal .b { font-size: 9px; font-weight: 700; color: var(--acc); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wdsel { display: flex; gap: 5px; }
+  .wdsel button { flex: 1; border: 1px solid var(--line); background: var(--card); color: var(--sub); border-radius: 10px; padding: 9px 0; font-weight: 800; font-size: 13px; }
+  .wdsel button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .msheet { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 60; display: flex; align-items: flex-end; animation: fadein .2s; }
+  .msheet .in { background: var(--card); width: 100%; border-radius: 22px 22px 0 0; padding: 18px 16px 24px; max-height: 82vh; overflow-y: auto; }
+  .opts { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 14px; }
+  .opts button { border: 1px solid var(--line); background: var(--card2); color: var(--ink); border-radius: 11px; padding: 10px 12px; font-size: 14px; font-weight: 700; }
+  .opts button.sug { border-color: var(--acc); color: var(--acc); }
+  .fld { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+  .fld label { font-size: 12px; font-weight: 700; color: var(--sub); }
+  input[type=number] { border: 1px solid var(--line); background: var(--card2); color: var(--ink); border-radius: 10px; padding: 10px; font-size: 14px; width: 100%; }
+  .catbar { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; }
+  .catbar .nm { width: 72px; font-weight: 700; flex: none; }
+  .catbar .tr { flex: 1; height: 10px; border-radius: 99px; background: var(--card2); overflow: hidden; }
+  .catbar .tr i { display: block; height: 100%; background: var(--acc); border-radius: 99px; }
+  .catbar .v { width: 78px; text-align: right; font-weight: 800; flex: none; }
+  .pips { display: flex; gap: 4px; margin-top: 8px; } .pips i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); } .pips i.on { background: var(--ok); }
 </style>
 </head>
 <body>
@@ -196,6 +245,7 @@
 <nav id="nav">
   <button data-tab="home"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 10.2 12 3.5l8.5 6.7"/><path d="M5.5 9v10.5c0 .6.4 1 1 1H10v-5.5h4v5.5h3.5c.6 0 1-.4 1-1V9"/></svg>홈</button>
   <button data-tab="rec"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h3M8 17h6"/></svg>기록</button>
+  <button data-tab="money"><svg class="i" viewBox="0 0 24 24"><path d="M4 7.5c0-1.4 1.1-2.5 2.5-2.5H17v3"/><rect x="4" y="7.5" width="16" height="12" rx="2.5"/><path d="M15.5 13.5h4.5"/><circle cx="16" cy="13.5" r=".6" fill="currentColor"/></svg>돈</button>
   <button data-tab="map"><svg class="i" viewBox="0 0 24 24"><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2-6-2Z"/><path d="M9 4.5v13M15 6.5v13"/></svg>지도</button>
   <button data-tab="dex"><svg class="i" viewBox="0 0 24 24"><path d="M5 4.5h11.5a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2v-13Z"/><path d="M5 17.5a2 2 0 0 1 2-2h11.5"/><path d="M9 8.5h6"/></svg>도감</button>
   <button data-tab="rpg"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 3.5h6v6L10 20l-2-2 .5-.5L5 14l-1.5 1.5L2 14l3-3 3.5 3.5L19 4"/><path d="M15 9l-6 6"/><path d="M4.5 17.5l2 2"/></svg>사냥</button>
@@ -913,6 +963,7 @@ function renderHome() {
   else h += '<button class="big" onclick="startShift()">운행 시작</button>';
   h += '<div class="grid" style="margin-top:12px">' + stat('오늘 완료', s.c.DELIVER + '건') + stat('수입', won(s.income)) + stat('근무', hmShort(s.work)) + '</div>' +
     '<div class="muted" style="margin-top:8px;font-size:12px" onclick="st.recView=\'day\';st.day=workDate(Date.now());setTab(\'rec\')">시간당 ' + one(s.perHour) + '건 · 수락률 ' + pct(s.acceptRate) + ' · 주행 ' + kmf(s.km) + ' · 자세히 ›</div></div>';
+  h += moneyHomeCard();
   h += gameCard();
   h += setupHint();
   return h;
@@ -1191,6 +1242,552 @@ function dexAchieve() {
   return h + '</div>';
 }
 
+/* ================= 가계부: 계산 ================= */
+/* MONEY-ENGINE-START */
+const POTS = {
+  fixed: { app: '카카오페이', name: '고정비', icon: '💳' },
+  living: { app: '네이버페이', name: '생활비', icon: '🛒' },
+  off: { app: '당근페이', name: '휴무 용돈', icon: '🥕' },
+  cash: { app: '현금', name: '저축', icon: '💵' }
+};
+const FEE_PER = 77;
+const SPEND_CATS = ['배달음식', '편의점', '카페', '식당', '마트', '쇼핑', '교통·충전', '게임·구독', '생활·병원', '기타'];
+const WD = '일월화수목금토';
+
+function mIsOff(M, k) {
+  if (M.off && M.off[k] != null) return M.off[k] === 1;
+  return (M.settings.offWeekdays || []).indexOf(parseKey(k).getDay()) >= 0;
+}
+function billHits(b, d) {
+  if (b.cycle === 'month') { const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); return d.getDate() === Math.min(b.day || 1, last); }
+  if (b.cycle === 'week') return d.getDay() === b.day;
+  if (b.cycle === 'once') return b.date === key(d);
+  return false;
+}
+function cycleText(b) {
+  if (b.cycle === 'month') return '매월 ' + b.day + '일';
+  if (b.cycle === 'week') return '매주 ' + WD[b.day] + '요일';
+  if (b.cycle === 'once') { const d = parseKey(b.date); return (d.getMonth() + 1) + '/' + d.getDate() + ' 한 번'; }
+  return '';
+}
+/** 저축 퀘스트: 근무일마다 현금 금고에 단계 금액 넣기. 연속 달성하면 단계 상승, 실패해도 단계는 안 내려감 */
+function saveQuest(M, today) {
+  const s = M.settings, steps = (s.saveSteps && s.saveSteps.length) ? s.saveSteps : [5000];
+  const up = s.streakUp || 5;
+  const cash = {};
+  for (const l of M.potLog) if (l.pot === 'cash' && l.amount > 0 && l.note !== '잔액 맞춤') { const k = key(workDate(l.ts)); cash[k] = (cash[k] || 0) + l.amount; }
+  let stage = 0, streak = 0, d = parseKey(M.start), guard = 0;
+  const hist = {};
+  while (d < today && guard++ < 800) {
+    const k = key(d);
+    if (!mIsOff(M, k)) {
+      const ok = (cash[k] || 0) >= steps[stage];
+      hist[k] = ok;
+      if (ok) { streak++; if (streak >= up && stage < steps.length - 1) { stage++; streak = 0; } } else streak = 0;
+    }
+    d = addDays(d, 1);
+  }
+  const tk = key(today), got = cash[tk] || 0, target = steps[stage];
+  const mon = addDays(today, -((today.getDay() + 6) % 7));
+  let weekN = 0, weekOk = true;
+  for (let x = mon; x < today; x = addDays(x, 1)) { const k = key(x); if (k in hist) { weekN++; if (!hist[k]) weekOk = false; } }
+  return {
+    stage, streak, up, target, got, done: got >= target, off: mIsOff(M, tk),
+    next: steps[Math.min(stage + 1, steps.length - 1)], maxed: stage >= steps.length - 1,
+    bonus: weekOk && weekN >= 2, bonusUntil: key(addDays(mon, 6)), weekN, hist
+  };
+}
+/**
+ * 앞으로 나갈 돈(고정비·매일 생활비·휴무 용돈)을 금고 잔액으로 가까운 것부터 채우고,
+ * 모자란 돈을 '그날 전까지 남은 근무일'로 나눠 근무일 하루 목표(T)를 구한다.
+ * 오늘 번 돈은 다음 날 들어오므로 마감일 전날까지의 근무일만 센다.
+ */
+function mPlan(M, today, horizon) {
+  today = today || workDate(Date.now()); horizon = horizon || 35;
+  const s = M.settings, paid = {};
+  for (const p of M.paid) paid[p.bill + '|' + p.due] = p;
+  const quest = saveQuest(M, today);
+  const occ = [];
+  for (let i = -7; i <= horizon; i++) {
+    const d = addDays(today, i), k = key(d);
+    if (i < 0 && k < M.start) continue;
+    for (const b of M.bills) {
+      if (b.paused || !billHits(b, d)) continue;
+      const pd = !!paid[b.id + '|' + k];
+      if (i < 0 && pd) continue;
+      occ.push({ kind: 'bill', id: b.id, name: b.name, amount: b.amount, due: k, i, pot: 'fixed', paid: pd });
+    }
+    if (i >= 0) {
+      occ.push({ kind: 'living', name: '생활비', amount: s.living, due: k, i, pot: 'living' });
+      if (mIsOff(M, k)) {
+        const bonus = quest.bonus && k <= quest.bonusUntil;
+        occ.push({ kind: 'off', name: '휴무 용돈', amount: bonus ? s.offBonus : s.offBase, bonus, due: k, i, pot: 'off' });
+      }
+    }
+  }
+  occ.sort((a, b) => a.i - b.i);
+  const left = {};
+  for (const p in POTS) left[p] = Math.max(0, (M.pots && M.pots[p]) || 0);
+  for (const o of occ) {
+    if (o.paid) { o.covered = o.amount; o.short = 0; continue; }
+    const c = Math.min(left[o.pot], o.amount);
+    left[o.pot] -= c; o.covered = c; o.short = o.amount - c;
+  }
+  const wd = [];
+  let w = 0;
+  for (let i = 0; i <= horizon + 1; i++) { wd[i] = w; if (!mIsOff(M, key(addDays(today, i)))) w++; }
+  const immediate = { fixed: 0, living: 0, off: 0 }, rate = { fixed: 0, living: 0, off: 0 }, cumP = { fixed: 0, living: 0, off: 0 };
+  let T = 0, cum = 0;
+  for (const o of occ) {
+    o.wd = o.i <= 0 ? 0 : wd[o.i];
+    if (o.short <= 0) continue;
+    if (o.i < 0) { o.late = true; continue; } // 지난 건 '냈나요?'로만 물어보고 목표에는 안 넣음
+    if (o.wd === 0) { immediate[o.pot] += o.short; o.now = true; continue; }
+    cum += o.short; cumP[o.pot] += o.short;
+    T = Math.max(T, cum / o.wd);
+    rate[o.pot] = Math.max(rate[o.pot], cumP[o.pot] / o.wd);
+  }
+  // 이번 달 전체 기준 (참고용)
+  const m0 = new Date(today.getFullYear(), today.getMonth(), 1), mDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  let mBills = 0, mOff = 0;
+  for (let i = 0; i < mDays; i++) {
+    const d = addDays(m0, i);
+    for (const b of M.bills) if (!b.paused && billHits(b, d)) mBills += b.amount;
+    if (mIsOff(M, key(d))) mOff++;
+  }
+  const mWork = mDays - mOff;
+  const mTotal = mBills + s.living * mDays + s.offBase * mOff + s.workSpend * mWork;
+  return {
+    occ, immediate, rate, T, quest, wd,
+    month: { days: mDays, work: mWork, off: mOff, bills: mBills, total: mTotal, perDay: mWork ? mTotal / mWork : null }
+  };
+}
+/** 정산이 들어왔을 때 금고별로 옮길 금액: 급한 것 → 근무일 몫(들어온 돈이 며칠치인지 반영) 순서 */
+function makeMoves(M, P, amount) {
+  const ws = M.settings.workSpend;
+  const daily = Math.max(20000, P.T + ws);
+  const n = Math.max(1, Math.round(amount / daily));
+  // 근무 중 쓸 돈(n일치)은 새마을금고에 남겨 둠
+  let left = Math.max(0, amount - ws * n);
+  const W = Math.max(1, P.wd[P.wd.length - 1]);
+  const out = [];
+  for (const pot of ['living', 'fixed', 'off']) {
+    // 앞으로 n 근무일 안에 마감인 돈, 또는 전체를 근무일로 고르게 나눈 몫 중 큰 쪽
+    let due = 0, all = 0;
+    for (const o of P.occ) if (o.pot === pot && o.short > 0 && o.wd >= 1) { all += o.short; if (o.wd <= n) due += o.short; }
+    const need = Math.ceil((P.immediate[pot] + Math.max(due, all * n / W)) / 1000) * 1000;
+    const a = Math.min(left, need);
+    if (a >= 1000) { out.push({ pot, amount: a, done: 0 }); left -= a; }
+  }
+  // 남은 돈은 '써도 되는 돈'으로 두지 않고, 아직 모자란 고정비·휴무 용돈부터 미리 채움
+  for (const pot of ['fixed', 'off']) {
+    if (left < 1000) break;
+    let short = P.immediate[pot];
+    for (const o of P.occ) if (o.pot === pot && o.short > 0 && o.wd >= 1) short += o.short;
+    const m = out.find(x => x.pot === pot);
+    const more = Math.min(left, Math.max(0, Math.ceil(short / 1000) * 1000 - (m ? m.amount : 0)));
+    if (more >= 1000) { if (m) m.amount += more; else out.push({ pot, amount: more, done: 0 }); left -= more; }
+  }
+  return out;
+}
+function spendBy(M, from, to) {
+  const cats = {};
+  let total = 0;
+  for (const t of M.txs) {
+    if (t.kind !== 'out' || !t.target || t.target.indexOf('cat:') !== 0 || t.ts < from || t.ts >= to) continue;
+    const c = t.target.slice(4);
+    cats[c] = (cats[c] || 0) + t.amount; total += t.amount;
+  }
+  return { total, list: Object.keys(cats).map(k => [k, cats[k]]).sort((a, b) => b[1] - a[1]) };
+}
+/* MONEY-ENGINE-END */
+
+/* ================= 가계부: 화면 ================= */
+function feeInfo(M) {
+  if (st._fee && Date.now() - st._fee.t < 60000) return st._fee;
+  const rs = [];
+  const incs = M.txs.filter(t => t.kind === 'in' && t.target === 'income' && /익일/.test(t.party)).slice(0, 10);
+  for (const t of incs) {
+    const f = dayFrom(addDays(workDate(t.ts), -1));
+    const s = stats(load(f, f + DAY), f, f + DAY);
+    if (s.income > 0 && s.unpaid === 0 && s.c.DELIVER > 0) {
+      const r = 1 - (t.amount + FEE_PER * s.c.DELIVER) / s.income;
+      if (r >= 0 && r <= 0.2) rs.push(r);
+    }
+  }
+  const today = workDate(Date.now()), f0 = dayFrom(addDays(today, -14)), t0 = dayFrom(today);
+  const s14 = stats(load(f0, t0), f0, t0);
+  return (st._fee = { t: Date.now(), rate: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0.04, learned: rs.length, avgFare: s14.avgFare || 3500 });
+}
+function grossFor(net, fee) { const k = 1 - fee.rate - FEE_PER / fee.avgFare; return net / (k > 0.5 ? k : 0.9); }
+function netOf(gross, n, fee) { return Math.max(0, gross * (1 - fee.rate) - FEE_PER * n); }
+
+function moneyCtx(again) {
+  const M = JSON.parse(A.moneyState());
+  const today = workDate(Date.now()), tk = key(today);
+  const P = mPlan(M, today);
+  // 새로 들어온 정산(이틀 안)은 옮기기 계획을 한 번 만들어 둠
+  if (!again) {
+    const planned = new Set(M.planned || []);
+    let made = false;
+    for (const t of M.txs) {
+      if (t.kind === 'in' && t.target === 'income' && !planned.has(t.id) && Date.now() - t.ts < 2 * DAY) {
+        A.moneySavePlan(String(t.id), JSON.stringify(makeMoves(M, P, t.amount))); made = true;
+      }
+    }
+    if (made) return moneyCtx(true);
+  }
+  const fee = feeInfo(M);
+  const pending = [];
+  for (const p of (M.plans || [])) p.moves.forEach((m, i) => { if (!m.done) pending.push({ tx: p.tx, i, pot: m.pot, amount: m.amount }); });
+  const pendingSum = pending.reduce((a, m) => a + m.amount, 0);
+  const bank = M.bank ? M.bank.balance : null;
+  const f = dayFrom(today);
+  const sd = stats(load(f, f + DAY), f, f + DAY);
+  const work = !mIsOff(M, tk);
+  const boss = work ? Math.ceil((P.T + M.settings.workSpend + P.immediate.fixed) / 1000) * 1000 : 0;
+  const goal = work ? boss + P.quest.target : 0;
+  if (A.moneySetBoss) A.moneySetBoss(JSON.stringify({ day: tk, boss, goal, rate: fee.rate }));
+  let spent = 0;
+  for (const t of M.txs) if (t.kind === 'out' && t.target.indexOf('cat:') === 0 && key(workDate(t.ts)) === tk) spent += t.amount;
+  return {
+    M, P, fee, today, tk, pending, pendingSum, bank, free: bank == null ? null : bank - pendingSum,
+    sd, netToday: netOf(sd.income, sd.c.DELIVER, fee), boss, goal, work, spent,
+    ask: M.txs.filter(t => t.status === 'ask')
+  };
+}
+function ddText(o) { return o.i < 0 ? (-o.i) + '일 지남' : o.i === 0 ? '오늘' : 'D-' + o.i; }
+function ddCls(o) { return o.paid ? 'ok' : o.i < 0 ? 'late' : o.i <= 3 ? 'soon' : ''; }
+function tgtText(t, M) {
+  if (!t) return '-';
+  if (t === 'income') return '배달 정산';
+  if (t === 'etcin') return '기타 입금';
+  const p = t.split(':');
+  if (p[0] === 'pot') return POTS[p[1]] ? POTS[p[1]].app + '로 옮김' : t;
+  if (p[0] === 'potback') return POTS[p[1]] ? POTS[p[1]].app + '에서 되돌림' : t;
+  if (p[0] === 'cat') return p[1];
+  if (p[0] === 'bill') { const b = M.bills.find(x => x.id === +p[1]); return (b ? b.name : '고정비') + ' 납부'; }
+  return t;
+}
+function mWhen(ts) { const d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + clock(ts); }
+
+function renderMoney() {
+  if (!A.moneyState) return '<div class="card empty">앱을 업데이트하면 가계부를 쓸 수 있어요</div>';
+  const v = st.moneyView || 'today';
+  let h = '<div class="seg">' + [['today', '오늘'], ['cal', '달력'], ['bills', '고정비'], ['hist', '내역']].map(m => '<button class="' + (v === m[0] ? 'on' : '') + '" onclick="st.moneyView=\'' + m[0] + '\';render()">' + m[1] + '</button>').join('') + '</div>';
+  const C = moneyCtx();
+  st.mc = C;
+  if (A.moneyListener && !A.moneyListener()) {
+    h += '<div class="card update"><b>은행 알림 읽기를 켜 주세요</b><div class="muted" style="margin:4px 0 10px">새마을금고 입출금 알림만 읽어서 자동으로 기록해요. 목록에서 <b>Rider Log · 은행 알림</b>을 켜면 돼요. 회색으로 막혀 있으면 앱 정보 → 오른쪽 위 ⋮ → <b>제한된 설정 허용</b> 후 다시 켜 주세요.</div>' +
+      '<div class="row"><button class="btn pri" onclick="A.moneyOpenListener()">켜러 가기</button><button class="btn" onclick="A.openAppInfo()">앱 정보</button></div></div>';
+  }
+  h += v === 'cal' ? moneyCal(C) : v === 'bills' ? moneyBills(C) : v === 'hist' ? moneyHist(C) : moneyToday(C);
+  if (st.assign != null) h += assignSheet(C);
+  return h;
+}
+
+function moneyToday(C) {
+  const { M, P } = C;
+  const s = M.settings;
+  let h = '<div class="card game"><div style="position:relative;z-index:1"><div style="font-size:12px;opacity:.7">오늘 써도 되는 돈 · 새마을금고</div>';
+  if (C.bank == null) h += '<div class="mbig">-</div><div style="font-size:12px;opacity:.7;margin-top:4px">새마을금고 알림이 한 번 오면 잔액이 잡혀요</div>';
+  else {
+    h += '<div class="mbig" style="' + (C.free < 0 ? 'color:#FF8A8A' : '') + '">' + (C.free < 0 ? '−' + num(-C.free) : num(C.free)) + '원</div>' +
+      '<div style="font-size:12px;opacity:.7;margin-top:4px">잔액 ' + num(C.bank) + '원' + (C.pendingSum ? ' − 아직 안 옮긴 돈 ' + num(C.pendingSum) + '원' : '') + ' · ' + mWhen(M.bank.ts) + ' 기준</div>';
+  }
+  if (C.work) {
+    const p = Math.min(100, C.spent / Math.max(1, s.workSpend) * 100);
+    h += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:14px;opacity:.85"><span>오늘 쓴 돈</span><span>' + num(C.spent) + ' / ' + num(s.workSpend) + '원</span></div><div class="mbar"><i class="' + (C.spent > s.workSpend ? '' : 'ok') + '" style="width:' + p.toFixed(0) + '%;' + (C.spent > s.workSpend ? 'background:#F05252' : '') + '"></i></div>';
+  }
+  h += '</div></div>';
+
+  // 오늘의 보스
+  if (C.work) {
+    const pBoss = Math.min(100, C.netToday / Math.max(1, C.goal) * 100), mark = C.boss / Math.max(1, C.goal) * 100;
+    const killed = C.netToday >= C.boss, all = C.netToday >= C.goal;
+    h += '<div class="card"><div class="row between"><h2 style="margin:0">⚔️ 오늘의 보스</h2>' + (all ? '<span class="badge b-hi">저축까지 완료</span>' : killed ? '<span class="badge b-hi">처치!</span>' : '<span class="badge b-na">남은 ' + num(C.boss - C.netToday) + '원</span>') + '</div>' +
+      '<div class="row" style="margin-top:10px;gap:16px"><div><div class="muted" style="font-size:12px">본전 (실수령)</div><div style="font-size:22px;font-weight:900">' + num(C.boss) + '원</div></div><div><div class="muted" style="font-size:12px">+ 저축 퀘스트</div><div style="font-size:22px;font-weight:900;color:var(--ok)">' + num(C.goal) + '원</div></div></div>' +
+      '<div class="mbar"><i class="' + (killed ? 'goal' : '') + '" style="width:' + pBoss.toFixed(1) + '%"></i><b style="left:' + mark.toFixed(1) + '%"></b></div>' +
+      '<div class="muted" style="font-size:12px;margin-top:8px">지금 실수령 약 ' + num(C.netToday) + '원 (앱 수입 ' + num(C.sd.income) + '원 · ' + C.sd.c.DELIVER + '건)<br>앱 화면 기준 본전은 약 <b>' + num(Math.ceil(grossFor(C.boss, C.fee) / 1000) * 1000) + '원</b>, 저축까지 약 ' + num(Math.ceil(grossFor(C.goal, C.fee) / 1000) * 1000) + '원 · 차감률 ' + (C.fee.rate * 100).toFixed(1) + '%' + (C.fee.learned ? ' (실제 입금 ' + C.fee.learned + '번으로 계산)' : ' (기본값, 입금이 쌓이면 맞춰져요)') + ' + 건당 77원</div></div>';
+  } else {
+    h += '<div class="card"><h2 style="margin:0 0 6px">🌙 오늘은 휴무</h2><div class="muted">당근페이 휴무 용돈 <b>' + num(M.pots.off) + '원</b>은 마음껏 써도 되는 돈이에요.' + (P.quest.bonus ? ' 이번 주 저축 퀘스트를 다 깨서 보너스 용돈이에요!' : '') + '</div></div>';
+  }
+
+  // 나눠 담기
+  if (C.pending.length) {
+    h += '<div class="card"><h2>📥 정산 나눠 담기</h2><div class="muted" style="font-size:12px;margin:-6px 0 4px">새마을금고에서 이 금액 그대로 옮기면 알림으로 자동 체크돼요</div>';
+    for (const m of C.pending) {
+      const pt = POTS[m.pot];
+      h += '<div class="mrow"><div class="mic">' + pt.icon + '</div><div style="flex:1"><div class="t">' + pt.app + '</div><div class="s">' + pt.name + ' 금고</div></div><div class="mamt">' + num(m.amount) + '원</div><button class="btn" onclick="moveDone(' + m.tx + ',' + m.i + ')">옮겼어요</button></div>';
+    }
+    h += '</div>';
+  }
+
+  // 확인 필요
+  if (C.ask.length) {
+    h += '<div class="card"><h2>❓ 확인 필요 ' + C.ask.length + '건</h2>';
+    for (const t of C.ask.slice(0, 6)) h += txRow(t, M);
+    h += '</div>';
+  }
+
+  // 저축 퀘스트
+  const q = P.quest;
+  h += '<div class="card"><div class="row between"><h2 style="margin:0">💵 저축 퀘스트</h2><span class="reward">' + (q.stage + 1) + '단계</span></div>';
+  if (q.off) h += '<div class="muted" style="margin-top:8px">휴무일엔 쉬어요. 오늘 넣은 현금 ' + num(q.got) + '원</div>';
+  else {
+    h += '<div class="quest' + (q.done ? ' done' : '') + '" style="border:0;padding-bottom:4px"><div class="qicon">' + (q.done ? '✅' : '💵') + '</div><div style="flex:1"><b style="font-size:14px">오늘 현금 ' + num(q.target) + '원 넣기</b><div class="qbar"><i style="width:' + Math.min(100, q.got / q.target * 100).toFixed(0) + '%"></i></div><div class="muted" style="font-size:11px;margin-top:3px">' + num(q.got) + ' / ' + num(q.target) + '원</div></div>' +
+      (q.done ? '' : '<button class="btn pri" onclick="cashIn(' + (q.target - q.got) + ')">넣었어요</button>') + '</div>';
+  }
+  const pips = []; for (let i = 0; i < q.up; i++) pips.push('<i class="' + (i < q.streak + (q.done && !q.off ? 1 : 0) ? 'on' : '') + '"></i>');
+  h += '<div class="pips">' + pips.join('') + '</div><div class="muted" style="font-size:12px;margin-top:6px">' + (q.maxed ? '최고 단계예요. 꾸준히만 가면 돼요.' : q.up + '일 연속 성공하면 ' + num(q.next) + '원 단계로 올라가요. 실패해도 단계는 안 내려가요.') +
+    '<br>이번 주 근무일 퀘스트를 다 깨면 휴무 용돈이 ' + num(M.settings.offBase) + '원 → <b>' + num(M.settings.offBonus) + '원</b>' + (q.bonus ? ' (지금 보너스 상태!)' : '') + '</div></div>';
+
+  // 금고
+  h += '<div class="card"><h2>🏦 금고</h2>';
+  for (const p in POTS) {
+    const pt = POTS[p];
+    h += '<div class="mrow" onclick="potMenu(\'' + p + '\')" style="cursor:pointer"><div class="mic">' + pt.icon + '</div><div style="flex:1"><div class="t">' + pt.app + '</div><div class="s">' + pt.name + (p === 'living' ? ' · 하루 ' + num(M.settings.living) + '원씩 자동 차감' : p === 'off' ? ' · 휴무일에 자동 차감' : '') + '</div></div><div class="mamt">' + num(M.pots[p]) + '원</div></div>';
+  }
+  h += '<div class="muted" style="font-size:12px;margin-top:6px">금고를 누르면 실제 잔액에 맞추거나 넣고 뺄 수 있어요.</div></div>';
+
+  // 다가오는 지출
+  const up = P.occ.filter(o => o.kind === 'bill' && o.i <= 14).slice(0, 12);
+  h += '<div class="card"><h2>📅 다가오는 고정비</h2>';
+  for (const o of up) {
+    const pc = Math.min(100, o.covered / o.amount * 100);
+    h += '<div class="mrow"><span class="dd ' + ddCls(o) + '">' + (o.paid ? '냄' : ddText(o)) + '</span><div style="flex:1;min-width:0"><div class="row between"><span class="t">' + esc(o.name) + '</span><span class="mamt">' + num(o.amount) + '원</span></div>' +
+      (o.paid ? '<div class="s">낸 걸로 체크됨</div>' : '<div class="thin"><i class="' + (pc >= 100 ? 'full' : '') + '" style="width:' + pc.toFixed(0) + '%"></i></div><div class="s">' + (o.short ? '모은 돈 ' + num(o.covered) + '원 · ' + num(o.short) + '원 더 필요' + (o.wd ? ' (근무 ' + o.wd + '일 남음)' : '') : '다 모였어요') + '</div>') + '</div>' +
+      (o.i <= 1 ? '<button class="btn" onclick="billToggle(' + o.id + ',\'' + o.due + '\',' + (o.paid ? 1 : 0) + ')">' + (o.paid ? '취소' : '냈어요') + '</button>' : '') + '</div>';
+  }
+  if (!up.length) h += '<div class="empty">2주 안에 나갈 고정비가 없어요</div>';
+  h += '</div>';
+
+  // 한 달 기준
+  const mo = P.month;
+  h += '<div class="card"><h2>📊 이번 달 기준</h2><div class="grid two">' +
+    stat('근무일 하루 목표', won(C.work ? C.boss : P.T + M.settings.workSpend), '금고 잔액·마감일 반영') + stat('한 달 평균', won(mo.perDay), '근무 ' + mo.work + '일 · 휴무 ' + mo.off + '일') + '</div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">고정비 ' + num(mo.bills) + ' + 생활비 ' + num(M.settings.living * mo.days) + ' + 휴무 용돈 ' + num(M.settings.offBase * mo.off) + ' + 근무 중 지출 ' + num(M.settings.workSpend * mo.work) + ' = <b>' + num(mo.total) + '원</b> (실수령 기준)</div></div>';
+  return h;
+}
+
+function txRow(t, M) {
+  const ask = t.status === 'ask';
+  return '<div class="mrow" onclick="st.assign=' + t.id + ';st.asRemember=null;render()" style="cursor:pointer"><div class="mic">' + (t.kind === 'in' ? '⬇️' : '⬆️') + '</div><div style="flex:1;min-width:0"><div class="t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(t.party || (t.kind === 'in' ? '입금' : '출금')) + '</div><div class="s">' + mWhen(t.ts) + ' · ' + (ask ? '<span style="color:var(--warn);font-weight:800">' + (t.target && t.target !== 'cat:기타' && t.target !== 'etcin' ? tgtText(t.target, M) + '? ' : '') + '눌러서 분류</span>' : esc(tgtText(t.target, M))) + '</div></div>' +
+    '<div class="mamt" style="color:' + (t.kind === 'in' ? 'var(--ok)' : 'var(--ink)') + '">' + (t.kind === 'in' ? '+' : '−') + num(t.amount) + '</div></div>';
+}
+
+function assignSheet(C) {
+  const t = C.M.txs.find(x => x.id === st.assign);
+  if (!t) { st.assign = null; return ''; }
+  const opt = (target, label) => '<button class="' + (t.target === target && t.status === 'ask' ? 'sug' : '') + '" onclick="doAssign(' + t.id + ',\'' + target + '\')">' + label + '</button>';
+  let h = '<div class="msheet" onclick="if(event.target===this){st.assign=null;render()}"><div class="in"><div class="row between"><b style="font-size:17px">' + esc(t.party || '거래') + '</b><b style="font-size:17px">' + (t.kind === 'in' ? '+' : '−') + num(t.amount) + '원</b></div><div class="muted">' + mWhen(t.ts) + ' · 지금: ' + esc(tgtText(t.target, C.M)) + (t.status === 'ask' ? ' (확인 전)' : '') + '</div>';
+  if (t.kind === 'in') {
+    h += '<div class="sec" style="margin-left:0">입금</div><div class="opts">' + opt('income', '배달 정산') + opt('etcin', '기타 입금') + '</div>';
+    h += '<div class="sec" style="margin-left:0">금고에서 되돌림</div><div class="opts">' + Object.keys(POTS).map(p => opt('potback:' + p, POTS[p].icon + ' ' + POTS[p].app)).join('') + '</div>';
+  } else {
+    h += '<div class="sec" style="margin-left:0">금고로 옮김</div><div class="opts">' + Object.keys(POTS).map(p => opt('pot:' + p, POTS[p].icon + ' ' + POTS[p].app)).join('') + '</div>';
+    const bills = C.P.occ.filter(o => o.kind === 'bill' && o.i >= -7 && o.i <= 10 && (!o.paid || C.M.paid.some(p => p.tx === t.id && p.bill === o.id && p.due === o.due)));
+    if (bills.length) h += '<div class="sec" style="margin-left:0">고정비 냄</div><div class="opts">' + bills.map(o => opt('bill:' + o.id + ':' + o.due, esc(o.name) + ' (' + parseKey(o.due).getDate() + '일)')).join('') + '</div>';
+    h += '<div class="sec" style="margin-left:0">지출</div><div class="opts">' + SPEND_CATS.map(c => opt('cat:' + c, c)).join('') + '</div>';
+  }
+  h += '<label class="row" style="gap:8px;font-size:14px;font-weight:700"><input type="checkbox" id="asRemember" ' + (remDefault(t) ? 'checked' : '') + ' onchange="st.asRemember=this.checked"> 다음에도 "' + esc((t.party || '').slice(0, 16)) + '"는 이걸로</label>' +
+    '<div class="muted" style="font-size:12px;margin-top:6px">금고 옮기기는 체크해도 확인을 한 번 더 물어봐요 (같은 이름으로 결제할 수도 있어서).</div>' +
+    '<button class="btn" style="width:100%;margin-top:14px" onclick="st.assign=null;render()">닫기</button></div></div>';
+  return h;
+}
+function remDefault(t) { return st.asRemember == null ? !/카카오페이|네이버페이|당근|토스|ATM|CD/i.test(t.party || '') : st.asRemember; }
+function doAssign(id, target) {
+  const t = st.mc.M.txs.find(x => x.id === id);
+  const rem = (t ? remDefault(t) : false) && target.indexOf('bill:') !== 0;
+  st.asRemember = null;
+  A.moneyAssign(String(id), target, rem && target.indexOf('pot:') !== 0 && target.indexOf('potback:') !== 0);
+  st.assign = null; render();
+}
+function moveDone(tx, i) { A.moneyMoveDone(String(tx), String(i)); render(); }
+function cashIn(def) {
+  const v = prompt('현금 금고에 넣은 금액 (원)', String(def));
+  if (v == null) return;
+  const n = Number(String(v).replace(/[^0-9]/g, ''));
+  if (n > 0) { A.moneyPot('cash', String(n), '저축 퀘스트'); render(); }
+}
+function billToggle(id, due, paid) {
+  if (paid) { if (confirm('낸 걸로 체크한 걸 취소할까요?')) A.moneyBillUnpaid(String(id), due); }
+  else {
+    const fromPot = confirm('카카오페이(고정비 금고)에서 냈나요?\n\n확인 = 카카오페이에서 냄 (금고에서 빠짐)\n취소 = 다른 데서 냄 (체크만)');
+    A.moneyBillPaid(String(id), due, fromPot);
+  }
+  render();
+}
+function potMenu(p) {
+  const pt = POTS[p], M = st.mc.M;
+  const v = prompt(pt.icon + ' ' + pt.app + ' (' + pt.name + ')\n지금 기록: ' + num(M.pots[p]) + '원\n\n· 실제 잔액에 맞추기: 숫자만 (예: 52000)\n· 넣기: +금액 (예: +10000)\n· 빼기: -금액 (예: -5000)', '');
+  if (v == null || !v.trim()) return;
+  const s = v.replace(/[,\s원]/g, '');
+  const n = Number(s.replace(/^[+-]/, ''));
+  if (!(n >= 0)) return;
+  if (s[0] === '+') A.moneyPot(p, String(n), '직접 넣음');
+  else if (s[0] === '-') A.moneyPot(p, String(-n), '직접 뺌');
+  else A.moneyPotSet(p, String(n));
+  render();
+}
+
+function moneyCal(C) {
+  const { M } = C;
+  const today = C.today;
+  if (!st.mMonth) st.mMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const m = st.mMonth, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  const isThis = m.getFullYear() === today.getFullYear() && m.getMonth() === today.getMonth();
+  let h = '<div class="card"><div class="row between"><h2 style="margin:0">고정 휴무 요일</h2><span class="muted" style="font-size:12px">매주 쉬는 날</span></div><div class="wdsel" style="margin-top:10px">' +
+    [0, 1, 2, 3, 4, 5, 6].map(d => '<button class="' + ((M.settings.offWeekdays || []).indexOf(d) >= 0 ? 'on' : '') + '" onclick="toggleWd(' + d + ')">' + WD[d] + '</button>').join('') + '</div></div>';
+  let work = 0, off = 0;
+  for (let i = 1; i <= days; i++) { if (mIsOff(M, key(new Date(m.getFullYear(), m.getMonth(), i)))) off++; else work++; }
+  h += '<div class="card"><div class="datenav" style="margin-top:0"><button onclick="calMove(-1)">◀</button><b>' + m.getFullYear() + '년 ' + (m.getMonth() + 1) + '월</b><button onclick="calMove(1)">▶</button></div>';
+  h += '<div class="cal">' + [...WD].map(w => '<div class="w">' + w + '</div>').join('');
+  for (let i = 0; i < m.getDay(); i++) h += '<div class="c pad"></div>';
+  for (let i = 1; i <= days; i++) {
+    const d = new Date(m.getFullYear(), m.getMonth(), i), k = key(d), o = mIsOff(M, k);
+    const bills = M.bills.filter(b => !b.paused && billHits(b, d));
+    h += '<div class="c' + (o ? ' off' : '') + (k === C.tk ? ' today' : '') + (d < today ? ' past' : '') + '" onclick="toggleOff(\'' + k + '\')"><div class="n">' + i + '</div>' +
+      bills.slice(0, 2).map(b => '<div class="b">' + esc(b.name.length > 4 ? b.name.slice(0, 4) : b.name) + '</div>').join('') + (bills.length > 2 ? '<div class="b">+' + (bills.length - 2) + '</div>' : '') + '</div>';
+  }
+  h += '</div><div class="muted" style="font-size:12px;margin-top:10px">날짜를 누르면 휴무 ↔ 근무가 바뀌고 목표 금액이 바로 다시 계산돼요. 비·눈 오는 날도 눌러서 빼 주세요.</div></div>';
+  h += '<div class="card"><div class="grid">' + stat('근무일', work + '일') + stat('휴무일', off + '일') + stat('하루 목표', won(C.work ? C.boss : C.P.T + M.settings.workSpend), isThis ? '지금 기준' : '') + '</div></div>';
+  return h;
+}
+function calMove(n) { st.mMonth = new Date(st.mMonth.getFullYear(), st.mMonth.getMonth() + n, 1); render(); }
+function toggleOff(k) {
+  const M = st.mc.M;
+  const now = mIsOff(M, k), weekly = (M.settings.offWeekdays || []).indexOf(parseKey(k).getDay()) >= 0;
+  const next = !now;
+  A.moneyOff(k, next === weekly ? 'auto' : (next ? 'off' : 'work'));
+  render();
+}
+function toggleWd(d) {
+  const cur = (st.mc.M.settings.offWeekdays || []).slice();
+  const i = cur.indexOf(d);
+  if (i >= 0) cur.splice(i, 1); else cur.push(d);
+  A.moneySettings(JSON.stringify({ offWeekdays: cur }));
+  render();
+}
+
+function moneyBills(C) {
+  const { M } = C;
+  const e = st.billEdit;
+  let h = '';
+  const monthly = b => b.cycle === 'month' ? b.amount : b.cycle === 'week' ? b.amount * 52 / 12 : 0;
+  const total = M.bills.filter(b => !b.paused).reduce((a, b) => a + monthly(b), 0);
+  h += '<div class="card"><div class="row between"><h2 style="margin:0">고정비 ' + M.bills.length + '개</h2><span class="muted" style="font-size:13px">월 약 <b style="color:var(--ink)">' + num(total) + '원</b></span></div>';
+  for (const b of M.bills) {
+    h += '<div class="mrow"><div style="flex:1;min-width:0;' + (b.paused ? 'opacity:.45' : '') + '"><div class="t">' + esc(b.name) + (b.paused ? ' <span class="badge b-na" style="font-size:10px">멈춤</span>' : '') + '</div><div class="s">' + cycleText(b) + (b.cycle === 'week' ? ' · 월 약 ' + num(monthly(b)) + '원' : '') + '</div></div><div class="mamt" style="' + (b.paused ? 'opacity:.45' : '') + '">' + num(b.amount) + '원</div>' +
+      '<label class="sw" title="켜기/멈춤"><input type="checkbox" ' + (b.paused ? '' : 'checked') + ' onchange="A.moneyBillPause(\'' + b.id + '\',!this.checked);render()"><span></span></label>' +
+      '<button class="btn" style="padding:8px 10px" onclick="st.billEdit=' + b.id + ';render();setTimeout(()=>document.getElementById(\'bf\').scrollIntoView({behavior:\'smooth\'}),50)">수정</button></div>';
+  }
+  h += '<div class="muted" style="font-size:12px;margin-top:6px">스위치를 끄면 계산에서 빠져요 (다시 시작할 때 켜면 돼요).</div></div>';
+
+  const b = e ? M.bills.find(x => x.id === e) : null;
+  const f = st.billForm = st.billForm && st.billForm._for === (e || 0) ? st.billForm : (b ? { _for: b.id, name: b.name, amount: b.amount, cycle: b.cycle, day: b.day, date: b.date } : { _for: 0, name: '', amount: '', cycle: 'once', day: 1, date: key(addDays(C.today, 7)) });
+  h += '<div class="card" id="bf"><h2>' + (b ? '고정비 수정' : '+ 나갈 돈 추가') + '</h2>' +
+    '<div class="fld"><label>이름</label><input type="text" id="bfName" value="' + esc(f.name) + '" placeholder="예: 친구 축의금, 오토바이 보험" oninput="st.billForm.name=this.value"></div>' +
+    '<div class="fld"><label>금액 (원)</label><input type="number" inputmode="numeric" id="bfAmt" value="' + esc(f.amount) + '" oninput="st.billForm.amount=this.value"></div>' +
+    '<div class="fld"><label>언제</label><div class="seg" style="margin:0">' + [['once', '한 번'], ['month', '매월'], ['week', '매주']].map(c => '<button class="' + (f.cycle === c[0] ? 'on' : '') + '" onclick="st.billForm.cycle=\'' + c[0] + '\';if(\'' + c[0] + '\'===\'week\'&&st.billForm.day>6)st.billForm.day=4;render()">' + c[1] + '</button>').join('') + '</div></div>';
+  if (f.cycle === 'once') h += '<div class="fld"><label>날짜</label><input type="date" value="' + esc(f.date || key(C.today)) + '" onchange="st.billForm.date=this.value"></div>';
+  else if (f.cycle === 'month') h += '<div class="fld"><label>매월 며칠</label><input type="number" inputmode="numeric" min="1" max="31" value="' + esc(f.day || 1) + '" oninput="st.billForm.day=Number(this.value)"></div>';
+  else h += '<div class="fld"><label>무슨 요일</label><div class="wdsel">' + [0, 1, 2, 3, 4, 5, 6].map(d => '<button class="' + (f.day === d ? 'on' : '') + '" onclick="st.billForm.day=' + d + ';render()">' + WD[d] + '</button>').join('') + '</div></div>';
+  h += '<div class="row" style="margin-top:6px"><button class="btn pri" style="flex:1" onclick="billSave()">' + (b ? '저장' : '추가') + '</button>' + (b ? '<button class="btn" onclick="billDel(' + b.id + ')" style="color:var(--bad)">삭제</button><button class="btn" onclick="st.billEdit=null;st.billForm=null;render()">취소</button>' : '') + '</div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">\'한 번\'은 일주일 뒤 몇만 원처럼 잊기 쉬운 돈이에요. 넣어 두면 D-day까지 근무일로 나눠서 목표에 들어가요.</div></div>';
+
+  const s = M.settings;
+  h += '<div class="sec">기준 금액</div><div class="card list" style="padding-top:4px;padding-bottom:4px">';
+  const row = (k, t, d) => item(t, d, '<button class="btn" onclick="setNum(\'' + k + '\',\'' + t + '\')">' + num(s[k]) + '원</button>');
+  h += row('living', '생활비 (하루)', '네이버페이에 담아 생필품·집밥에 쓰는 돈. 매일 자동으로 빠져요.');
+  h += row('workSpend', '근무 중 지출 (하루)', '일하면서 새마을금고로 쓰는 돈 (김밥 한 줄 같은 거). 오늘 쓴 돈 막대의 기준이에요.');
+  h += row('offBase', '휴무 용돈 (기본)', '휴무일마다 당근페이에 담아 두고 마음껏 쓰는 돈.');
+  h += row('offBonus', '휴무 용돈 (보너스)', '그 주 저축 퀘스트를 다 깨면 이만큼으로 올라가요.');
+  h += item('저축 퀘스트 단계', (s.saveSteps || []).map(num).join(' → ') + '원 · ' + (s.streakUp || 5) + '일 연속이면 한 단계 위로', '<button class="btn" onclick="setSteps()">바꾸기</button>');
+  h += '</div>';
+  return h;
+}
+function billSave() {
+  const f = st.billForm;
+  const amount = Number(String(f.amount).replace(/[^0-9]/g, ''));
+  if (!f.name.trim() || !amount) { alert('이름과 금액을 넣어 주세요'); return; }
+  const o = { id: st.billEdit || 0, name: f.name.trim(), amount, cycle: f.cycle, day: f.cycle === 'once' ? null : Number(f.day) || 1, date: f.cycle === 'once' ? f.date : null };
+  if (o.cycle === 'month') o.day = Math.min(31, Math.max(1, o.day));
+  const cur = st.billEdit ? st.mc.M.bills.find(x => x.id === st.billEdit) : null;
+  o.paused = cur ? cur.paused : false;
+  A.moneyBillSave(JSON.stringify(o));
+  st.billEdit = null; st.billForm = null; render();
+}
+function billDel(id) { if (confirm('이 고정비를 지울까요?')) { A.moneyBillDelete(String(id)); st.billEdit = null; st.billForm = null; render(); } }
+function setNum(k, t) {
+  const v = prompt(t + ' (원)', String(st.mc.M.settings[k]));
+  if (v == null) return;
+  const n = Number(String(v).replace(/[^0-9]/g, ''));
+  if (n >= 0 && String(v).trim() !== '') { const o = {}; o[k] = n; A.moneySettings(JSON.stringify(o)); render(); }
+}
+function setSteps() {
+  const s = st.mc.M.settings;
+  const v = prompt('단계 금액을 쉼표로 (예: 5000,10000,15000,20000,30000)', (s.saveSteps || []).join(','));
+  if (v == null) return;
+  const arr = v.split(/[,\s]+/).map(x => Number(x.replace(/[^0-9]/g, ''))).filter(x => x > 0);
+  const up = Number(prompt('몇 일 연속 성공하면 단계를 올릴까요?', String(s.streakUp || 5)));
+  if (arr.length) { A.moneySettings(JSON.stringify({ saveSteps: arr, streakUp: up > 0 ? up : 5 })); render(); }
+}
+
+function moneyHist(C) {
+  const { M } = C;
+  const mode = st.histMode || 'week';
+  const today = C.today;
+  const from = mode === 'week' ? dayFrom(addDays(today, -((today.getDay() + 6) % 7))) : mode === 'month' ? dayFrom(new Date(today.getFullYear(), today.getMonth(), 1)) : dayFrom(today);
+  const sp = spendBy(M, from, dayFrom(today) + DAY);
+  let h = '<div class="seg">' + [['today', '오늘'], ['week', '이번 주'], ['month', '이번 달']].map(m => '<button class="' + (mode === m[0] ? 'on' : '') + '" onclick="st.histMode=\'' + m[0] + '\';render()">' + m[1] + '</button>').join('') + '</div>';
+  h += '<div class="card"><div class="row between"><h2 style="margin:0">💸 돈 새는 곳</h2><b>' + num(sp.total) + '원</b></div><div class="muted" style="font-size:12px;margin:4px 0 8px">새마을금고에서 나간 지출만 (금고로 옮긴 돈·고정비 제외)</div>';
+  const max = sp.list.length ? sp.list[0][1] : 1;
+  for (const [c, v] of sp.list) h += '<div class="catbar"><span class="nm">' + esc(c) + '</span><span class="tr"><i style="width:' + (v / max * 100).toFixed(0) + '%"></i></span><span class="v">' + num(v) + '원</span></div>';
+  if (!sp.list.length) h += '<div class="empty">아직 지출 기록이 없어요</div>';
+  h += '</div>';
+  const list = M.txs.filter(t => t.ts >= from).slice(0, 60);
+  h += '<div class="card"><h2>거래 내역</h2>';
+  for (const t of list) h += txRow(t, M);
+  if (!list.length) h += '<div class="empty">새마을금고 알림이 오면 여기 쌓여요</div>';
+  h += '</div>';
+  const logs = M.potLog.slice(0, 25);
+  h += '<div class="card"><h2>금고 기록</h2>';
+  for (const l of logs) {
+    const pt = POTS[l.pot] || { icon: '•', app: l.pot };
+    h += '<div class="mrow"><div class="mic">' + pt.icon + '</div><div style="flex:1;min-width:0"><div class="t">' + esc(l.note || pt.app) + '</div><div class="s">' + pt.app + ' · ' + mWhen(l.ts) + '</div></div><div class="mamt" style="color:' + (l.amount > 0 ? 'var(--ok)' : 'var(--bad)') + '">' + (l.amount > 0 ? '+' : '') + num(l.amount) + '</div>' +
+      (l.tx == null && /직접|저축 퀘스트|잔액 맞춤/.test(l.note) ? '<button class="btn" style="padding:6px 9px" onclick="if(confirm(\'이 기록을 지울까요?\')){A.moneyPotLogDelete(\'' + l.id + '\');render()}">✕</button>' : '') + '</div>';
+  }
+  if (!logs.length) h += '<div class="empty">아직 없어요</div>';
+  h += '</div>';
+  h += '<div class="card list" style="padding-top:4px;padding-bottom:4px">' + item('알림 직접 넣기', '알림을 놓쳤으면 새마을금고 알림 문구를 붙여 넣어 기록해요.', '<button class="btn" onclick="manualIngest()">넣기</button>') + '</div>';
+  return h;
+}
+function manualIngest() {
+  const v = prompt('알림 문구 붙여넣기\n예: [출금] 5,900원 9003-****-5 잔액 33,359원 11/28 23:56 씨유서초청동점', '');
+  if (!v) return;
+  const r = A.moneyIngest(v);
+  alert(r === 'ok' ? '기록했어요' : r === 'dup' ? '이미 있는 거래예요' : '형식을 못 읽었어요');
+  render();
+}
+
+/** 홈 화면 요약 카드 */
+function moneyHomeCard() {
+  if (!A.moneyState) return '';
+  let C;
+  try { C = moneyCtx(); st.mc = C; } catch (e) { return ''; }
+  const next = C.P.occ.find(o => o.kind === 'bill' && !o.paid && o.i >= 0);
+  let h = '<div class="card" onclick="setTab(\'money\')" style="cursor:pointer"><div class="row between"><h2 style="margin:0">' + (C.work ? '⚔️ 오늘의 보스 ' + num(C.boss) + '원' : '🌙 오늘은 휴무') + '</h2><svg class="i" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 6 6 6-6 6"/></svg></div>';
+  if (C.work) {
+    const p = Math.min(100, C.netToday / Math.max(1, C.goal) * 100), mark = C.boss / Math.max(1, C.goal) * 100;
+    h += '<div class="mbar"><i class="' + (C.netToday >= C.boss ? 'goal' : '') + '" style="width:' + p.toFixed(1) + '%"></i><b style="left:' + mark.toFixed(1) + '%"></b></div><div class="muted" style="font-size:12px;margin-top:6px">실수령 ' + num(C.netToday) + '원 · ' + (C.netToday >= C.boss ? '처치! 이제 저축 ' + num(Math.max(0, C.goal - C.netToday)) + '원 남음' : '본전까지 ' + num(C.boss - C.netToday) + '원 (앱 기준 약 ' + num(Math.ceil(grossFor(C.boss - C.netToday, C.fee) / 100) * 100) + '원)') + '</div>';
+  }
+  h += '<div class="grid two" style="margin-top:10px">' + stat('써도 되는 돈', C.free == null ? '-' : won(C.free)) +
+    stat(next ? esc(next.name) + ' ' + ddText(next) : '다음 고정비', next ? won(next.amount) : '-', next ? (next.short ? num(next.short) + '원 모자람' : '다 모임') : '') + '</div>';
+  if (C.pending.length || C.ask.length) h += '<div class="warn" style="margin-top:8px;font-weight:700">' + [C.pending.length ? '나눠 담을 돈 ' + C.pending.length + '건' : '', C.ask.length ? '확인 필요 ' + C.ask.length + '건' : ''].filter(Boolean).join(' · ') + '</div>';
+  return h + '</div>';
+}
+
 /* ================= 공통 ================= */
 function setTab(t) { if (st.tab === 'rpg' && t !== 'rpg' && window.RPGAPP) RPGAPP.unmount(); if (t !== 'rec') st.trip = null; if (t === 'home') st.game = null; st.tab = t; render(); window.scrollTo(0, 0); }
 function render() {
@@ -1201,7 +1798,7 @@ function render() {
   pill.innerHTML = '<span class="dot"></span>' + (running ? '운행 중' : '대기');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
   document.getElementById('setbtn').classList.toggle('on', st.tab === 'settings' || st.tab === 'cams');
-  const fn = { home: renderHome, rec: renderRec, map: renderMap, dex: renderDexTab, settings: renderSettings, cams: renderCams, vault: renderVault, rpg: renderRpg }[st.tab] || renderHome;
+  const fn = { home: renderHome, money: renderMoney, rec: renderRec, map: renderMap, dex: renderDexTab, settings: renderSettings, cams: renderCams, vault: renderVault, rpg: renderRpg }[st.tab] || renderHome;
   try {
     document.getElementById('view').innerHTML = fn();
   } catch (e) {
@@ -1213,6 +1810,7 @@ window.refresh = function () {
   if (st.tab === 'cams' || st.tab === 'map' || (st.tab === 'rec' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'dex' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  if (st.tab === 'money' && (st.assign != null || (document.activeElement && document.activeElement.tagName === 'INPUT'))) return;
   render();
 };
 window.onUpdateInfo = function (info) { st.update = info; if (st.tab === 'home') render(); };
@@ -1236,6 +1834,43 @@ function mockAtlas() {
   const st4 = { explorer: { value: 412, level: 6, next: 500, prev: 370 }, veteran: { value: 23, level: 7, next: 28, prev: 21 }, merchant: { value: 3120000, level: 6, next: 3400000, prev: 2400000 }, adventurer: { value: 214, level: 6, next: 280, prev: 210 } };
   const ms = [['가게 10곳 등록', 1, 1], ['가게 30곳 등록', 1, 0], ['동네 1곳 탐험 완료', 1, 1], ['배달 100건 완료', 1, 1], ['배달 300건 완료', 0, 0]].map(x => ({ title: x[0], done: !!x[2], value: 42, goal: 100 }));
   return (window._mockAtlas = { map: JSON.stringify({ cells, now }), regions: JSON.stringify({ dongs, now }), stores: JSON.stringify(stores), records: JSON.stringify(records), profile: JSON.stringify({ stats: st4, bonus: { explore: 38200, adventure: 9000, safety: 2400, achieve: 30000, total: 79600, today: 4300, cap: 12000, milestones: ms } }) });
+}
+/* 가계부 미리보기용 (실제 앱에서는 Money.kt 가 처리) */
+function mockMoney() {
+  const now = Date.now(), dk = ts => key(workDate(ts));
+  const M = window._mm || (window._mm = {
+    settings: { living: 20000, workSpend: 20000, offBase: 30000, offBonus: 50000, offWeekdays: [1], saveSteps: [5000, 10000, 15000, 20000, 30000], streakUp: 5 },
+    start: key(addDays(workDate(now), -6)),
+    bills: [[1, '월세', 400000, 'month', 5], [2, '쿠팡 멤버십', 8000, 'month', 6], [3, '케어원', 60000, 'month', 20], [4, '관리비', 100000, 'month', 25], [5, '운전자보험', 31000, 'month', 26], [6, '유튜브 프리미엄', 14900, 'month', 26], [7, '고고로', 130900, 'week', 4], [8, '핸드폰 요금', 10000, 'week', 5], [9, '마운자로', 430000, 'month', 1, true]].map(b => ({ id: b[0], name: b[1], amount: b[2], cycle: b[3], day: b[4], date: null, paused: !!b[5] })),
+    paid: [], off: {},
+    txs: [
+      { id: 3, ts: now - 2 * H, kind: 'out', amount: 5900, balance: 33359, party: '씨유서초청동점', target: 'cat:편의점', status: 'auto' },
+      { id: 2, ts: now - 5 * H, kind: 'out', amount: 12000, balance: 39259, party: '카카오페이', target: 'cat:기타', status: 'ask' },
+      { id: 1, ts: now - 9 * H, kind: 'in', amount: 98500, balance: 51259, party: '디비 익일', target: 'income', status: 'auto' }
+    ],
+    potLog: [{ id: 1, ts: now - 30 * H, pot: 'fixed', amount: 60000, note: '새마을금고에서 옮김', tx: null }, { id: 2, ts: now - 28 * H, pot: 'cash', amount: 5000, note: '저축 퀘스트', tx: null }],
+    plans: [], planned: [], bank: { balance: 33359, ts: now - 2 * H }
+  });
+  const pots = () => { const o = { fixed: 0, living: 0, off: 0, cash: 0 }; for (const l of M.potLog) o[l.pot] += l.amount; return o; };
+  let lid = 100;
+  const addPot = (pot, amount, note, tx) => M.potLog.unshift({ id: ++lid, ts: Date.now(), pot, amount, note, tx: tx == null ? null : tx });
+  return {
+    moneyState: () => JSON.stringify(Object.assign({}, M, { pots: pots() })),
+    moneyListener: () => !window._mmNoListener, moneyOpenListener: () => {},
+    moneySettings: j => Object.assign(M.settings, JSON.parse(j)),
+    moneyBillSave: j => { const o = JSON.parse(j); if (o.id) Object.assign(M.bills.find(b => b.id === o.id), o); else { o.id = M.bills.length + 1; M.bills.push(o); } return String(o.id); },
+    moneyBillDelete: id => { M.bills = M.bills.filter(b => b.id !== +id); },
+    moneyBillPause: (id, p) => { M.bills.find(b => b.id === +id).paused = p; },
+    moneyBillPaid: (id, due, fromPot) => { const b = M.bills.find(x => x.id === +id); M.paid.push({ bill: +id, due, ts: Date.now(), tx: null }); if (fromPot) addPot('fixed', -b.amount, b.name + ' 납부'); },
+    moneyBillUnpaid: (id, due) => { M.paid = M.paid.filter(p => !(p.bill === +id && p.due === due)); },
+    moneyOff: (k, s) => { if (s === 'auto') delete M.off[k]; else M.off[k] = s === 'off' ? 1 : 0; },
+    moneyPot: (p, a, n) => addPot(p, +a, n), moneyPotSet: (p, b) => { const d = +b - pots()[p]; if (d) addPot(p, d, '잔액 맞춤'); },
+    moneyPotLogDelete: id => { M.potLog = M.potLog.filter(l => l.id !== +id); },
+    moneyAssign: (id, t) => { const x = M.txs.find(y => y.id === +id); x.target = t; x.status = 'ok'; M.potLog = M.potLog.filter(l => l.tx !== x.id); if (t.indexOf('pot:') === 0) addPot(t.slice(4), x.amount, '새마을금고에서 옮김', x.id); },
+    moneySavePlan: (tx, j) => { if (M.planned.indexOf(+tx) < 0) { M.planned.push(+tx); M.plans.push({ tx: +tx, moves: JSON.parse(j) }); } },
+    moneyMoveDone: (tx, i) => { const p = M.plans.find(x => x.tx === +tx); const m = p.moves[+i]; m.done = 2; addPot(m.pot, m.amount, '직접 옮김 체크'); },
+    moneySetBoss: () => {}, moneyIngest: () => 'fail'
+  };
 }
 function makeMock() {
   const stores = [
@@ -1272,7 +1907,7 @@ function makeMock() {
       t += (2 + rnd() * 10 / busy) * 60000;
     }
   }
-  return {
+  return Object.assign(mockMoney(), {
     isRunning: () => shifts.some(s => s.end == null),
     shiftStart: () => String((shifts.find(s => s.end == null) || {}).start || ''),
     startShift: () => shifts.push({ id: shifts.length + 1, start: Date.now(), end: null }),
@@ -1290,7 +1925,7 @@ function makeMock() {
     rpgInputs: since => { const t = Date.now(); const ds = events.filter(e => e.type === 'DELIVER' && e.amount); const xp = ds.reduce((a, e) => a + e.amount, 0); return JSON.stringify({ shifts: shifts.filter(x => !x.end || x.end > +since).map(x => [x.start, x.end]), xpBefore: ds.filter(e => e.ts < +since).reduce((a, e) => a + e.amount, 0), xpEvents: ds.filter(e => e.ts >= +since).map(e => [e.ts, e.amount]), bp: Math.floor(xp / 100), xp: xp, running: !shifts[shifts.length - 1].end, now: t }); },
     version: () => '3', getGame: () => JSON.stringify({ xp: 512340, level: 10, cur: 44340, need: 92000, title: '골목대장', quests: [{ title: '처음 가 보는 가게 3곳 방문', progress: 1, target: 3, done: false, kind: 'NEW_STORES' }, { title: '저녁 피크(18~21시)에 6건 완료', progress: 6, target: 6, done: true, kind: 'PEAK' }, { title: '오늘의 탐방: 방배동 들르기', progress: 0, target: 1, done: false, kind: 'AREA' }], vault: { total: 15000, paid: 6000, pending: 9000 }, questsDone: 5, monthDone: 5, tickets: [{ id: 1, ts: Date.now(), source: '레벨 10 달성', used: null }], explore: { visited: 214, total: 1428, today: 6 }, dex: 37, stats: JSON.parse(mockAtlas().profile).stats, vaultLog: (window._vlog || []).concat([{ ts: Date.now() - 864e5, amount: 3000, note: '저녁 피크(18~21시)에 6건 완료' }]) }), getCells: () => JSON.stringify({ lat0: 37.445, lng0: 126.975, dlat: 0.002695, dlng: 0.003396, rows: 34, cols: 42, cells: [[10, 12, 0], [10, 13, 1]] }), getDex: () => JSON.stringify([{ id: 1, name: '양재동김밥', visits: 12, first: Date.now() - 9e8, last: Date.now() }, { id: 2, name: '교촌치킨 역삼점', visits: 4, first: Date.now() - 5e8, last: Date.now() }, { id: 3, name: '본죽 도곡점', visits: 1, first: Date.now(), last: Date.now() }]), vaultWithdraw: () => {}, useTicket: () => {}, getSync: () => JSON.stringify({ repo: 'ko123tp-collab/riderlog-data', hasToken: true, last: Date.now(), status: '3개 파일 업로드', ok: true }), setSync: () => {}, syncNow: () => {}, getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
     setCaptureOn: () => {}, setCaptureApp: () => {}, openAccessibilitySettings: () => {}, openAppInfo: () => {}, exportCapture: () => {}, clearCapture: () => {}
-  };
+  });
 }
 </script>
 </body>
