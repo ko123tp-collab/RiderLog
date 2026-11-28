@@ -97,7 +97,8 @@ object Game {
         val d = db(ctx)
         val fares = scalarLong(d, "SELECT SUM(amount) FROM events WHERE type='DELIVER' AND amount IS NOT NULL")
         val quests = scalarLong(d, "SELECT COUNT(*) FROM quests WHERE done_ts IS NOT NULL")
-        return fares + quests * QUEST_XP + Atlas.bonusXp(ctx)
+        val checks = try { Money.checkXp(ctx) } catch (e: Exception) { 0L }
+        return fares + quests * QUEST_XP + Atlas.bonusXp(ctx) + checks
     }
 
     // ---------------- 퀘스트 ----------------

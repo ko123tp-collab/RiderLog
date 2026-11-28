@@ -55,6 +55,11 @@ object Money {
                 w.execSQL("CREATE TABLE IF NOT EXISTS offdays(day TEXT PRIMARY KEY, off INTEGER NOT NULL)")
                 w.execSQL("CREATE TABLE IF NOT EXISTS plans(tx_id INTEGER PRIMARY KEY, json TEXT NOT NULL)")
                 w.execSQL("CREATE TABLE IF NOT EXISTS party_map(party TEXT PRIMARY KEY, target TEXT NOT NULL, always INTEGER NOT NULL DEFAULT 0)")
+                w.execSQL("CREATE TABLE IF NOT EXISTS bill_over(bill_id INTEGER NOT NULL, due TEXT NOT NULL, amount INTEGER, new_due TEXT, PRIMARY KEY(bill_id, due))")
+                w.execSQL("CREATE TABLE IF NOT EXISTS loans(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, from_pot TEXT NOT NULL, to_pot TEXT NOT NULL, amount INTEGER NOT NULL, note TEXT)")
+                try { w.execSQL("ALTER TABLE bills ADD COLUMN variable INTEGER NOT NULL DEFAULT 0") } catch (e: Exception) {}
+                try { w.execSQL("ALTER TABLE bill_paid ADD COLUMN amount INTEGER") } catch (e: Exception) {}
+                try { w.execSQL("ALTER TABLE bill_paid ADD COLUMN source TEXT") } catch (e: Exception) {}
                 w.execSQL("CREATE INDEX IF NOT EXISTS idx_bank_ts ON bank_tx(ts)")
                 w.execSQL("CREATE INDEX IF NOT EXISTS idx_pot_ts ON pot_log(ts)")
                 ready = true
@@ -216,6 +221,7 @@ object Money {
         if (j.has("day") && !j.isNull("day")) cv.put("day", j.optInt("day")) else cv.putNull("day")
         if (j.has("date") && !j.isNull("date")) cv.put("date", j.optString("date")) else cv.putNull("date")
         cv.put("paused", if (j.optBoolean("paused", false)) 1 else 0)
+        cv.put("variable", if (j.optBoolean("variable", false)) 1 else 0)
         val id = j.optLong("id", 0L)
         val d = db(ctx)
         return if (id > 0) {
@@ -226,6 +232,20 @@ object Money {
     fun deleteBill(ctx: Context, id: Long) {
         val d = db(ctx)
         d.delete("bills", "id=?", arrayOf(id.toString()))
+        d.delete("bill_over", "bill_id=?", arrayOf(id.toString()))
+    }
+
+    /** 이번 회차만 금액·날짜 바꾸기 (due = 원래 날짜) */
+    fun setOver(ctx: Context, id: Long, due: String, amount: Int?, newDue: String?) {
+        val cv = ContentValues()
+        cv.put("bill_id", id); cv.put("due", due)
+        if (amount != null) cv.put("amount", amount) else cv.putNull("amount")
+        if (!newDue.isNullOrBlank() && newDue != due) cv.put("new_due", newDue) else cv.putNull("new_due")
+        db(ctx).insertWithOnConflict("bill_over", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun clearOver(ctx: Context, id: Long, due: String) {
+        db(ctx).delete("bill_over", "bill_id=? AND due=?", arrayOf(id.toString(), due))
     }
 
     fun setPaused(ctx: Context, id: Long, paused: Boolean) {
@@ -241,14 +261,20 @@ object Money {
     }
 
     /** 냈어요. fromPot 이면 고정비 금고(카카오페이)에서 빠진 것으로 기록 */
-    fun billPaid(ctx: Context, id: Long, due: String, fromPot: Boolean, txId: Long? = null) {
+    fun billPaid(ctx: Context, id: Long, due: String, fromPot: Boolean, txId: Long? = null) =
+        billPay(ctx, id, due, if (fromPot) "fixed" else "mg", null, txId)
+
+    /** 납부: source 는 돈이 실제로 나간 곳 (fixed/living/off/cash 금고, 또는 mg=새마을금고) */
+    fun billPay(ctx: Context, id: Long, due: String, source: String, amount: Int?, txId: Long? = null) {
         val d = db(ctx)
         val b = billInfo(d, id) ?: return
         billUnpaid(ctx, id, due)
+        val amt = amount ?: b.second
         var logId: Long? = null
-        if (fromPot) logId = addPot(ctx, "fixed", -b.second, "${b.first} 납부")
+        if (source in POTS) logId = addPot(ctx, source, -amt, "${b.first} 납부")
         val cv = ContentValues()
         cv.put("bill_id", id); cv.put("due", due); cv.put("ts", System.currentTimeMillis())
+        cv.put("amount", amt); cv.put("source", source)
         if (txId != null) cv.put("tx_id", txId)
         if (logId != null && logId > 0) cv.put("log_id", logId)
         d.insertWithOnConflict("bill_paid", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
@@ -261,6 +287,36 @@ object Money {
         }
         d.delete("bill_paid", "bill_id=? AND due=?", arrayOf(id.toString(), due))
     }
+
+    // ---------------- 금고끼리 옮기기 · 내부 대출 ----------------
+
+    fun transfer(ctx: Context, from: String, to: String, amount: Int, note: String) {
+        if (from !in POTS || to !in POTS || from == to || amount <= 0) return
+        val now = System.currentTimeMillis()
+        addPot(ctx, from, -amount, note, ts = now)
+        addPot(ctx, to, amount, note, ts = now)
+    }
+
+    /** from 금고에서 to 금고로 빌림. 나중에 from 금고로 들어오는 돈이 먼저 갚는 데 쓰인 걸로 계산됨 */
+    fun loan(ctx: Context, from: String, to: String, amount: Int, note: String) {
+        if (from !in POTS || to !in POTS || from == to || amount <= 0) return
+        val cv = ContentValues()
+        cv.put("ts", System.currentTimeMillis()); cv.put("from_pot", from); cv.put("to_pot", to); cv.put("amount", amount); cv.put("note", note.take(40))
+        db(ctx).insert("loans", null, cv)
+        transfer(ctx, from, to, amount, "대출 · " + note.take(30))
+    }
+
+    fun deleteLoan(ctx: Context, id: Long) {
+        db(ctx).delete("loans", "id=?", arrayOf(id.toString()))
+    }
+
+    /** 주간 잔액 점검 완료 (경험치 보상용 횟수) */
+    fun checkDone(ctx: Context) {
+        val p = prefs(ctx)
+        p.edit().putInt("checks", p.getInt("checks", 0) + 1).putString("lastCheck", dayKey(System.currentTimeMillis())).apply()
+    }
+
+    fun checkXp(ctx: Context): Long = prefs(ctx).getInt("checks", 0) * 2000L
 
     // ---------------- 은행 알림 ----------------
 
@@ -369,7 +425,7 @@ object Money {
             target.startsWith("potback:") -> addPot(ctx, target.substring(8), -amount, "새마을금고로 되돌림", id, ts)
             target.startsWith("bill:") -> {
                 val p = target.split(":")
-                if (p.size >= 3) billPaid(ctx, p[1].toLong(), p[2], false, id)
+                if (p.size >= 3) billPay(ctx, p[1].toLong(), p[2], "mg", amount, id)
             }
         }
     }
@@ -527,17 +583,45 @@ object Money {
         o.put("settings", settings(ctx))
         o.put("start", prefs(ctx).getString("start", dayKey(System.currentTimeMillis())))
         val bills = JSONArray()
-        d.rawQuery("SELECT id, name, amount, cycle, day, date, paused FROM bills ORDER BY id", null).use { c ->
+        d.rawQuery("SELECT id, name, amount, cycle, day, date, paused, variable FROM bills ORDER BY id", null).use { c ->
             while (c.moveToNext()) bills.put(
                 JSONObject().put("id", c.getLong(0)).put("name", c.getString(1)).put("amount", c.getInt(2)).put("cycle", c.getString(3))
                     .put("day", if (c.isNull(4)) JSONObject.NULL else c.getInt(4)).put("date", if (c.isNull(5)) JSONObject.NULL else c.getString(5))
-                    .put("paused", c.getInt(6) == 1)
+                    .put("paused", c.getInt(6) == 1).put("variable", c.getInt(7) == 1)
             )
         }
+        val overs = JSONArray()
+        d.rawQuery("SELECT bill_id, due, amount, new_due FROM bill_over", null).use { c ->
+            while (c.moveToNext()) overs.put(
+                JSONObject().put("bill", c.getLong(0)).put("due", c.getString(1)).put("amount", if (c.isNull(2)) JSONObject.NULL else c.getInt(2))
+                    .put("newDue", if (c.isNull(3)) JSONObject.NULL else c.getString(3))
+            )
+        }
+        o.put("overs", overs)
+        val loans = JSONArray()
+        d.rawQuery("SELECT id, ts, from_pot, to_pot, amount, note FROM loans ORDER BY ts", null).use { c ->
+            while (c.moveToNext()) loans.put(
+                JSONObject().put("id", c.getLong(0)).put("ts", c.getLong(1)).put("from", c.getString(2)).put("to", c.getString(3))
+                    .put("amount", c.getInt(4)).put("note", c.getString(5) ?: "")
+            )
+        }
+        o.put("loans", loans)
+        // 대출 상환 계산용: 빌려준 금고로 들어온 돈 (가장 오래된 대출 이후 전부)
+        val inflow = JSONArray()
+        var oldest = Long.MAX_VALUE
+        for (i in 0 until loans.length()) oldest = minOf(oldest, loans.getJSONObject(i).getLong("ts"))
+        if (oldest != Long.MAX_VALUE) d.rawQuery("SELECT id, ts, pot, amount, note FROM pot_log WHERE ts >= ? AND amount > 0 ORDER BY ts, id", arrayOf(oldest.toString())).use { c ->
+            while (c.moveToNext()) inflow.put(JSONObject().put("id", c.getLong(0)).put("ts", c.getLong(1)).put("pot", c.getString(2)).put("amount", c.getInt(3)).put("note", c.getString(4) ?: ""))
+        }
+        o.put("inflow", inflow)
+        o.put("lastCheck", prefs(ctx).getString("lastCheck", "") ?: "")
         o.put("bills", bills)
         val paid = JSONArray()
-        d.rawQuery("SELECT bill_id, due, ts, tx_id FROM bill_paid WHERE due >= ?", arrayOf(dayKey(System.currentTimeMillis() - 70 * 24 * 3600_000L))).use { c ->
-            while (c.moveToNext()) paid.put(JSONObject().put("bill", c.getLong(0)).put("due", c.getString(1)).put("ts", c.getLong(2)).put("tx", if (c.isNull(3)) JSONObject.NULL else c.getLong(3)))
+        d.rawQuery("SELECT bill_id, due, ts, tx_id, amount, source FROM bill_paid WHERE due >= ?", arrayOf(dayKey(System.currentTimeMillis() - 70 * 24 * 3600_000L))).use { c ->
+            while (c.moveToNext()) paid.put(
+                JSONObject().put("bill", c.getLong(0)).put("due", c.getString(1)).put("ts", c.getLong(2)).put("tx", if (c.isNull(3)) JSONObject.NULL else c.getLong(3))
+                    .put("amount", if (c.isNull(4)) JSONObject.NULL else c.getInt(4)).put("source", c.getString(5) ?: "")
+            )
         }
         o.put("paid", paid)
         val since = (System.currentTimeMillis() - 62 * 24 * 3600_000L).toString()

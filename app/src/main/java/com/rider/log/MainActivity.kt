@@ -502,6 +502,31 @@ class MainActivity : Activity() {
         fun moneyBillUnpaid(id: String, due: String) = Money.billUnpaid(this@MainActivity, id.toLong(), due)
 
         @JavascriptInterface
+        fun moneyBillPay(id: String, due: String, source: String, amount: String) =
+            Money.billPay(this@MainActivity, id.toLong(), due, source, amount.filter { it.isDigit() }.toIntOrNull())
+
+        @JavascriptInterface
+        fun moneyBillOver(id: String, due: String, amount: String, newDue: String) =
+            Money.setOver(this@MainActivity, id.toLong(), due, amount.filter { it.isDigit() }.toIntOrNull(), newDue.ifBlank { null })
+
+        @JavascriptInterface
+        fun moneyBillOverClear(id: String, due: String) = Money.clearOver(this@MainActivity, id.toLong(), due)
+
+        @JavascriptInterface
+        fun moneyTransfer(from: String, to: String, amount: String, note: String) =
+            Money.transfer(this@MainActivity, from, to, amount.filter { it.isDigit() }.toIntOrNull() ?: 0, note.ifBlank { "금고끼리 옮김" })
+
+        @JavascriptInterface
+        fun moneyLoan(from: String, to: String, amount: String, note: String) =
+            Money.loan(this@MainActivity, from, to, amount.filter { it.isDigit() }.toIntOrNull() ?: 0, note)
+
+        @JavascriptInterface
+        fun moneyLoanDelete(id: String) = Money.deleteLoan(this@MainActivity, id.toLong())
+
+        @JavascriptInterface
+        fun moneyCheckDone() = Money.checkDone(this@MainActivity)
+
+        @JavascriptInterface
         fun moneyOff(day: String, state: String) = Money.setOff(this@MainActivity, day, state)
 
         @JavascriptInterface

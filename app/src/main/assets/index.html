@@ -1264,6 +1264,49 @@ function billHits(b, d) {
   if (b.cycle === 'once') return b.date === key(d);
   return false;
 }
+function dayDiff(a, b) { return Math.round((parseKey(a) - parseKey(b)) / DAY); }
+/** 매달 금액이 바뀌는 항목: 가장 최근에 확인한 금액 (없으면 기본 금액) */
+function lastAmount(M, b) {
+  let best = null;
+  for (const o of (M.overs || [])) if (o.bill === b.id && o.amount != null && (!best || o.due > best.due)) best = o;
+  for (const p of (M.paid || [])) if (p.bill === b.id && p.amount != null && (!best || p.due > best.due)) best = p;
+  return best ? best.amount : b.amount;
+}
+/** from~to 사이 고정비 회차. 이번 회차만 바꾼 금액·날짜를 반영 (due = 원래 날짜, date = 실제 낼 날짜) */
+function billOcc(M, from, to) {
+  const ov = {};
+  for (const o of (M.overs || [])) ov[o.bill + '|' + o.due] = o;
+  const out = [], fk = key(from), tk = key(to);
+  for (let d = addDays(from, -21); d <= addDays(to, 21); d = addDays(d, 1)) {
+    const k = key(d);
+    for (const b of M.bills) {
+      if (b.paused || !billHits(b, d)) continue;
+      const o = ov[b.id + '|' + k];
+      const date = o && o.newDue ? o.newDue : k;
+      if (date < fk || date > tk) continue;
+      const fixedAmt = o && o.amount != null;
+      out.push({ b, due: k, date, amount: fixedAmt ? o.amount : (b.variable ? lastAmount(M, b) : b.amount), over: !!o, moved: date !== k, needAmt: !!b.variable && !fixedAmt });
+    }
+  }
+  return out;
+}
+/** 내부 대출: 빌려준 금고로 들어오는 돈이 오래된 대출부터 갚는 걸로 계산 */
+function loanState(M) {
+  const loans = (M.loans || []).map(l => Object.assign({}, l, { back: 0 })).sort((a, b) => a.ts - b.ts);
+  for (const f of (M.inflow || [])) {
+    if (/^대출|잔액 맞춤/.test(f.note || '')) continue;
+    let amt = f.amount;
+    for (const l of loans) {
+      if (amt <= 0) break;
+      if (l.from !== f.pot || l.ts > f.ts || l.back >= l.amount) continue;
+      const a = Math.min(amt, l.amount - l.back);
+      l.back += a; amt -= a;
+    }
+  }
+  const owed = { fixed: 0, living: 0, off: 0, cash: 0 };
+  for (const l of loans) { l.left = l.amount - l.back; owed[l.from] += l.left; }
+  return { loans, open: loans.filter(l => l.left > 0), owed };
+}
 function cycleText(b) {
   if (b.cycle === 'month') return '매월 ' + b.day + '일';
   if (b.cycle === 'week') return '매주 ' + WD[b.day] + '요일';
@@ -1307,17 +1350,15 @@ function mPlan(M, today, horizon) {
   const s = M.settings, paid = {};
   for (const p of M.paid) paid[p.bill + '|' + p.due] = p;
   const quest = saveQuest(M, today);
-  const occ = [];
-  for (let i = -7; i <= horizon; i++) {
+  const occ = [], tk0 = key(today);
+  for (const x of billOcc(M, addDays(today, -7), addDays(today, horizon))) {
+    const i = dayDiff(x.date, tk0), pd = paid[x.b.id + '|' + x.due];
+    if (i < 0 && (pd || x.date < M.start)) continue;
+    occ.push({ kind: 'bill', id: x.b.id, name: x.b.name, amount: pd && pd.amount != null ? pd.amount : x.amount, due: x.due, date: x.date, i, pot: 'fixed', paid: !!pd, over: x.over, moved: x.moved, needAmt: x.needAmt && !pd && i <= 7 });
+  }
+  for (let i = 0; i <= horizon; i++) {
     const d = addDays(today, i), k = key(d);
-    if (i < 0 && k < M.start) continue;
-    for (const b of M.bills) {
-      if (b.paused || !billHits(b, d)) continue;
-      const pd = !!paid[b.id + '|' + k];
-      if (i < 0 && pd) continue;
-      occ.push({ kind: 'bill', id: b.id, name: b.name, amount: b.amount, due: k, i, pot: 'fixed', paid: pd });
-    }
-    if (i >= 0) {
+    {
       occ.push({ kind: 'living', name: '생활비', amount: s.living, due: k, i, pot: 'living' });
       if (mIsOff(M, k)) {
         const bonus = quest.bonus && k <= quest.bonusUntil;
@@ -1326,6 +1367,7 @@ function mPlan(M, today, horizon) {
     }
   }
   occ.sort((a, b) => a.i - b.i);
+  const L = loanState(M);
   const left = {};
   for (const p in POTS) left[p] = Math.max(0, (M.pots && M.pots[p]) || 0);
   for (const o of occ) {
@@ -1347,18 +1389,18 @@ function mPlan(M, today, horizon) {
     T = Math.max(T, cum / o.wd);
     rate[o.pot] = Math.max(rate[o.pot], cumP[o.pot] / o.wd);
   }
+  // 저축(현금)에서 빌린 돈은 일주일 안에 갚는 걸 목표로
+  rate.cash = L.owed.cash > 0 ? L.owed.cash / Math.max(1, wd[Math.min(7, horizon)]) : 0;
+  T += rate.cash;
   // 이번 달 전체 기준 (참고용)
   const m0 = new Date(today.getFullYear(), today.getMonth(), 1), mDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   let mBills = 0, mOff = 0;
-  for (let i = 0; i < mDays; i++) {
-    const d = addDays(m0, i);
-    for (const b of M.bills) if (!b.paused && billHits(b, d)) mBills += b.amount;
-    if (mIsOff(M, key(d))) mOff++;
-  }
+  for (const x of billOcc(M, m0, addDays(m0, mDays - 1))) mBills += x.amount;
+  for (let i = 0; i < mDays; i++) if (mIsOff(M, key(addDays(m0, i)))) mOff++;
   const mWork = mDays - mOff;
   const mTotal = mBills + s.living * mDays + s.offBase * mOff + s.workSpend * mWork;
   return {
-    occ, immediate, rate, T, quest, wd,
+    occ, immediate, rate, T, quest, wd, loans: L,
     month: { days: mDays, work: mWork, off: mOff, bills: mBills, total: mTotal, perDay: mWork ? mTotal / mWork : null }
   };
 }
@@ -1371,11 +1413,20 @@ function makeMoves(M, P, amount) {
   let left = Math.max(0, amount - ws * n);
   const W = Math.max(1, P.wd[P.wd.length - 1]);
   const out = [];
-  for (const pot of ['living', 'fixed', 'off']) {
+  const owed = P.loans ? P.loans.owed : { fixed: 0, living: 0, off: 0, cash: 0 };
+  // 빌린 돈이 있는 금고를 먼저 (상환이 맨 앞)
+  const order = ['living', 'fixed', 'off', 'cash'].sort((a, b) => (owed[b] > 0) - (owed[a] > 0));
+  for (const pot of order) {
+    if (pot === 'cash') {
+      if (owed.cash <= 0) continue;
+      const a = Math.min(left, Math.ceil(Math.min(owed.cash, P.rate.cash * n) / 1000) * 1000);
+      if (a >= 1000) { out.push({ pot, amount: a, done: 0 }); left -= a; }
+      continue;
+    }
     // 앞으로 n 근무일 안에 마감인 돈, 또는 전체를 근무일로 고르게 나눈 몫 중 큰 쪽
     let due = 0, all = 0;
     for (const o of P.occ) if (o.pot === pot && o.short > 0 && o.wd >= 1) { all += o.short; if (o.wd <= n) due += o.short; }
-    const need = Math.ceil((P.immediate[pot] + Math.max(due, all * n / W)) / 1000) * 1000;
+    const need = Math.ceil(Math.max(P.immediate[pot] + Math.max(due, all * n / W), owed[pot]) / 1000) * 1000;
     const a = Math.min(left, need);
     if (a >= 1000) { out.push({ pot, amount: a, done: 0 }); left -= a; }
   }
@@ -1483,6 +1534,8 @@ function renderMoney() {
   }
   h += v === 'cal' ? moneyCal(C) : v === 'bills' ? moneyBills(C) : v === 'hist' ? moneyHist(C) : moneyToday(C);
   if (st.assign != null) h += assignSheet(C);
+  if (st.bill) h += billSheet(C);
+  if (st.xfer) h += xferSheet(C);
   return h;
 }
 
@@ -1530,6 +1583,10 @@ function moneyToday(C) {
     h += '</div>';
   }
 
+  h += checkCard(C);
+  const need = P.occ.filter(o => o.needAmt);
+  for (const o of need) h += '<div class="card update" onclick="openBill(' + o.id + ',\'' + o.due + '\')" style="cursor:pointer"><div class="row between"><div><b>이번 ' + esc(o.name) + ' 얼마예요?</b><div class="muted">' + parseKey(o.date).getDate() + '일에 나가요 · 지금은 지난번 금액 ' + num(o.amount) + '원으로 계산 중</div></div><button class="btn pri">입력</button></div></div>';
+
   // 저축 퀘스트
   const q = P.quest;
   h += '<div class="card"><div class="row between"><h2 style="margin:0">💵 저축 퀘스트</h2><span class="reward">' + (q.stage + 1) + '단계</span></div>';
@@ -1546,18 +1603,21 @@ function moneyToday(C) {
   h += '<div class="card"><h2>🏦 금고</h2>';
   for (const p in POTS) {
     const pt = POTS[p];
-    h += '<div class="mrow" onclick="potMenu(\'' + p + '\')" style="cursor:pointer"><div class="mic">' + pt.icon + '</div><div style="flex:1"><div class="t">' + pt.app + '</div><div class="s">' + pt.name + (p === 'living' ? ' · 하루 ' + num(M.settings.living) + '원씩 자동 차감' : p === 'off' ? ' · 휴무일에 자동 차감' : '') + '</div></div><div class="mamt">' + num(M.pots[p]) + '원</div></div>';
+    h += '<div class="mrow" onclick="potMenu(\'' + p + '\')" style="cursor:pointer"><div class="mic">' + pt.icon + '</div><div style="flex:1"><div class="t">' + pt.app + '</div><div class="s">' + pt.name + (p === 'living' ? ' · 하루 ' + num(M.settings.living) + '원씩 자동 차감' : p === 'off' ? ' · 휴무일에 자동 차감' : '') + '</div></div><div class="mamt" style="' + (M.pots[p] < 0 ? 'color:var(--bad)' : '') + '">' + num(M.pots[p]) + '원</div></div>';
   }
-  h += '<div class="muted" style="font-size:12px;margin-top:6px">금고를 누르면 실제 잔액에 맞추거나 넣고 뺄 수 있어요.</div></div>';
+  if (Object.keys(POTS).some(p => M.pots[p] < 0)) h += '<div class="warn" style="font-size:12px;margin-top:6px">마이너스인 금고가 있어요. 실제 잔액을 눌러 맞추거나, 다른 금고에서 빌린 걸로 기록해 주세요.</div>';
+  h += '<div class="row" style="margin-top:10px"><button class="btn" style="flex:1" onclick="st.xfer={from:\'living\',to:\'fixed\',amount:\'\'};render()">⇄ 금고끼리 옮기기 · 빌리기</button></div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">금고를 누르면 실제 잔액에 맞추거나 넣고 뺄 수 있어요.</div></div>';
+  h += loanCard(C);
 
   // 다가오는 지출
   const up = P.occ.filter(o => o.kind === 'bill' && o.i <= 14).slice(0, 12);
-  h += '<div class="card"><h2>📅 다가오는 고정비</h2>';
+  h += '<div class="card"><h2>📅 다가오는 고정비</h2><div class="muted" style="font-size:12px;margin:-6px 0 2px">누르면 이번 회차 금액·날짜를 고치거나 납부할 수 있어요</div>';
   for (const o of up) {
     const pc = Math.min(100, o.covered / o.amount * 100);
-    h += '<div class="mrow"><span class="dd ' + ddCls(o) + '">' + (o.paid ? '냄' : ddText(o)) + '</span><div style="flex:1;min-width:0"><div class="row between"><span class="t">' + esc(o.name) + '</span><span class="mamt">' + num(o.amount) + '원</span></div>' +
-      (o.paid ? '<div class="s">낸 걸로 체크됨</div>' : '<div class="thin"><i class="' + (pc >= 100 ? 'full' : '') + '" style="width:' + pc.toFixed(0) + '%"></i></div><div class="s">' + (o.short ? '모은 돈 ' + num(o.covered) + '원 · ' + num(o.short) + '원 더 필요' + (o.wd ? ' (근무 ' + o.wd + '일 남음)' : '') : '다 모였어요') + '</div>') + '</div>' +
-      (o.i <= 1 ? '<button class="btn" onclick="billToggle(' + o.id + ',\'' + o.due + '\',' + (o.paid ? 1 : 0) + ')">' + (o.paid ? '취소' : '냈어요') + '</button>' : '') + '</div>';
+    h += '<div class="mrow" style="cursor:pointer" onclick="openBill(' + o.id + ',\'' + o.due + '\')"><span class="dd ' + ddCls(o) + '">' + (o.paid ? '냄' : ddText(o)) + '</span><div style="flex:1;min-width:0"><div class="row between"><span class="t">' + esc(o.name) + (o.needAmt ? ' <span class="dd soon">금액 확인</span>' : o.over ? ' <span class="dd">이번만 변경</span>' : '') + '</span><span class="mamt">' + num(o.amount) + '원</span></div>' +
+      (o.paid ? '<div class="s">납부 완료</div>' : '<div class="thin"><i class="' + (pc >= 100 ? 'full' : '') + '" style="width:' + pc.toFixed(0) + '%"></i></div><div class="s">' + (o.short ? '모은 돈 ' + num(o.covered) + '원 · ' + num(o.short) + '원 더 필요' + (o.wd ? ' (근무 ' + o.wd + '일 남음)' : '') : '다 모였어요') + '</div>') + '</div>' +
+      (o.paid ? '' : '<button class="btn" onclick="event.stopPropagation();openBill(' + o.id + ',\'' + o.due + '\',1)">납부</button>') + '</div>';
   }
   if (!up.length) h += '<div class="empty">2주 안에 나갈 고정비가 없어요</div>';
   h += '</div>';
@@ -1631,6 +1691,152 @@ function potMenu(p) {
   render();
 }
 
+/* ----- 고정비 회차: 이번만 수정 · 납부 · 모자라면 빌리기 ----- */
+function payNext(id) {
+  const o = st.mc.P.occ.find(x => x.kind === 'bill' && x.id === id && !x.paid);
+  if (!o) { alert('5주 안에 낼 회차가 없어요'); return; }
+  openBill(id, o.due, 1);
+}
+function openBill(id, due, pay) {
+  const M = st.mc.M, b = M.bills.find(x => x.id === id);
+  if (!b) return;
+  const o = st.mc.P.occ.find(x => x.kind === 'bill' && x.id === id && x.due === due);
+  const amt = o ? o.amount : b.amount;
+  st.bill = { id, due, date: o ? o.date : due, amount: String(amt), pay: String(amt), source: 'fixed', focusPay: !!pay };
+  render();
+  if (pay) setTimeout(() => { const e = document.getElementById('bsPay'); if (e) e.scrollIntoView({ block: 'center' }); }, 60);
+}
+function billSheet(C) {
+  const { M } = C, sb = st.bill, b = M.bills.find(x => x.id === sb.id);
+  if (!b) { st.bill = null; return ''; }
+  const o = C.P.occ.find(x => x.kind === 'bill' && x.id === sb.id && x.due === sb.due) || {};
+  const paid = M.paid.find(p => p.bill === sb.id && p.due === sb.due);
+  const dd = parseKey(sb.due);
+  let h = '<div class="msheet" onclick="if(event.target===this){st.bill=null;render()}"><div class="in">';
+  h += '<div class="row between"><b style="font-size:18px">' + esc(b.name) + '</b><span class="muted">' + cycleText(b) + '</span></div>';
+  h += '<div class="muted" style="margin-bottom:12px">' + (dd.getMonth() + 1) + '월 ' + dd.getDate() + '일 회차' + (o.over ? ' · 이번만 바꾼 값 적용 중' : '') + '</div>';
+  if (paid) {
+    h += '<div class="card" style="background:var(--card2);box-shadow:none"><b>✅ 납부 완료</b><div class="muted">' + num(paid.amount != null ? paid.amount : o.amount) + '원 · ' + ({ fixed: '카카오페이', living: '네이버페이', off: '당근페이', cash: '현금', mg: '새마을금고' }[paid.source] || '기록') + '에서 · ' + mWhen(paid.ts) + '</div>' +
+      '<button class="btn" style="margin-top:10px" onclick="if(confirm(\'납부를 취소할까요? 금고에서 뺀 돈도 되돌려요.\')){A.moneyBillUnpaid(\'' + sb.id + '\',\'' + sb.due + '\');st.bill=null;render()}">납부 취소</button></div>';
+  }
+  // 금액·날짜 수정
+  h += '<div class="sec" style="margin-left:0">금액 · 날짜 바꾸기</div>' +
+    '<div class="row"><div class="fld" style="flex:1"><label>금액 (원)</label><input type="number" inputmode="numeric" value="' + esc(sb.amount) + '" oninput="st.bill.amount=this.value"></div>' +
+    '<div class="fld" style="flex:1"><label>낼 날짜</label><input type="date" value="' + esc(sb.date) + '" onchange="st.bill.date=this.value"></div></div>' +
+    '<div class="row"><button class="btn" style="flex:1" onclick="billOver(0)">이번만</button><button class="btn" style="flex:1" onclick="billOver(1)">앞으로 계속</button>' + (o.over ? '<button class="btn" onclick="A.moneyBillOverClear(\'' + sb.id + '\',\'' + sb.due + '\');st.bill=null;render()">원래대로</button>' : '') + '</div>';
+  if (!paid) {
+    const src = sb.source, amt = Number(String(sb.pay).replace(/[^0-9]/g, '')) || 0;
+    h += '<div class="sec" style="margin-left:0" id="bsPay">납부</div><div class="fld"><label>낸 금액 (원)</label><input type="number" inputmode="numeric" value="' + esc(sb.pay) + '" oninput="st.bill.pay=this.value" onchange="render()"></div>' +
+      '<div class="fld"><label>어디서 냈나요? (돈이 실제로 나간 곳)</label><div class="opts" style="margin:2px 0 0">' +
+      [['fixed', '💳 카카오페이'], ['mg', '🏦 새마을금고'], ['living', '🛒 네이버페이'], ['off', '🥕 당근페이'], ['cash', '💵 현금']].map(x => '<button class="' + (src === x[0] ? 'sug' : '') + '" onclick="st.bill.source=\'' + x[0] + '\';render()">' + x[1] + '</button>').join('') + '</div></div>';
+    const bal = src === 'mg' ? null : (M.pots[src] || 0);
+    if (bal != null && amt > bal) {
+      const lack = amt - bal;
+      const lenders = Object.keys(POTS).filter(p => p !== src && (M.pots[p] || 0) > 0);
+      h += '<div class="card update" style="margin:4px 0 10px"><b>' + POTS[src].app + ' 기록이 ' + num(lack) + '원 모자라요</b><div class="muted" style="font-size:12px;margin:4px 0 8px">다른 금고에서 빌려서 내면 갚을 돈으로 남고, 다음 정산 때 먼저 갚게 돼요. 실제로 그 돈을 옮겼거나 그 금고 돈으로 냈을 때 눌러 주세요.</div>' +
+        (lenders.length ? '<div class="opts" style="margin:0">' + lenders.map(p => '<button onclick="payBorrow(\'' + p + '\',' + lack + ')">' + POTS[p].icon + ' ' + POTS[p].app + '에서 ' + num(Math.min(lack, M.pots[p])) + '원 빌려서 납부</button>').join('') + '</div>' : '<div class="muted">빌릴 수 있는 금고가 없어요. 새마을금고에서 냈다면 위에서 새마을금고를 골라 주세요.</div>') + '</div>';
+    }
+    h += '<button class="big" style="margin-top:6px" onclick="payBill()">' + num(amt) + '원 납부 기록</button>';
+  }
+  h += '<button class="btn" style="width:100%;margin-top:12px" onclick="st.bill=null;render()">닫기</button></div></div>';
+  return h;
+}
+function billOver(forever) {
+  const sb = st.bill, M = st.mc.M, b = M.bills.find(x => x.id === sb.id);
+  const amount = Number(String(sb.amount).replace(/[^0-9]/g, ''));
+  if (!amount) { alert('금액을 넣어 주세요'); return; }
+  if (forever) {
+    const d = parseKey(sb.date);
+    const o = { id: b.id, name: b.name, amount, cycle: b.cycle, paused: b.paused, variable: b.variable, day: b.day, date: b.date };
+    if (b.cycle === 'month') o.day = d.getDate();
+    else if (b.cycle === 'week') o.day = d.getDay();
+    else o.date = sb.date;
+    if (!confirm(b.name + '을(를) 앞으로 계속 ' + num(amount) + '원, ' + cycleText(o) + '로 바꿀까요?')) return;
+    A.moneyBillSave(JSON.stringify(o));
+    A.moneyBillOverClear(String(b.id), sb.due);
+  } else {
+    A.moneyBillOver(String(b.id), sb.due, String(amount), sb.date);
+  }
+  st.bill = null; render();
+}
+function payBill(skipWarn) {
+  const sb = st.bill, amt = Number(String(sb.pay).replace(/[^0-9]/g, ''));
+  if (!amt) { alert('금액을 넣어 주세요'); return; }
+  if (!skipWarn && sb.source !== 'mg') {
+    const bal = JSON.parse(A.moneyState()).pots[sb.source] || 0;
+    if (amt > bal && !confirm(POTS[sb.source].app + ' 기록은 ' + num(bal) + '원인데 ' + num(amt) + '원을 내면 ' + num(amt - bal) + '원 마이너스가 돼요.\n\n실제로 ' + POTS[sb.source].app + '에서 낸 게 맞나요? 새마을금고에서 냈다면 취소 후 새마을금고를 골라 주세요.')) return;
+  }
+  A.moneyBillPay(String(sb.id), sb.due, sb.source, String(amt));
+  st.bill = null; render();
+}
+function payBorrow(from, lack) {
+  const sb = st.bill, M = st.mc.M, b = M.bills.find(x => x.id === sb.id);
+  const a = Math.min(lack, M.pots[from] || 0);
+  A.moneyLoan(from, sb.source, String(a), b.name + ' 납부');
+  payBill();
+}
+function loanCard(C) {
+  const L = C.P.loans;
+  if (!L || !L.open.length) return '';
+  let h = '<div class="card"><div class="row between"><h2 style="margin:0">🧾 갚을 돈</h2><b style="color:var(--bad)">' + num(L.open.reduce((a, l) => a + l.left, 0)) + '원</b></div><div class="muted" style="font-size:12px;margin:4px 0 2px">빌려준 금고로 돈이 들어오면 자동으로 갚아져요. 다음 정산 나눠 담기에 맨 먼저 들어가요.</div>';
+  for (const l of L.open) {
+    const f = POTS[l.from], t = POTS[l.to];
+    h += '<div class="mrow"><div class="mic">' + f.icon + '</div><div style="flex:1;min-width:0"><div class="t">' + f.app + '에 갚을 돈</div><div class="s">' + t.app + '로 빌림 · ' + esc(l.note) + ' · ' + mWhen(l.ts) + '</div><div class="thin"><i style="width:' + (l.back / l.amount * 100).toFixed(0) + '%"></i></div></div><div style="text-align:right"><div class="mamt">' + num(l.left) + '원</div><div class="s">/ ' + num(l.amount) + '</div></div></div>' +
+      '<div class="row" style="justify-content:flex-end;padding-bottom:8px"><button class="btn" onclick="repay(' + l.id + ')">' + t.app + ' 돈으로 바로 갚기</button><button class="btn" onclick="if(confirm(\'이 빚 기록을 지울까요? (금고 잔액은 그대로)\')){A.moneyLoanDelete(\'' + l.id + '\');render()}">✕</button></div>';
+  }
+  return h + '</div>';
+}
+function repay(id) {
+  const l = st.mc.P.loans.open.find(x => x.id === id);
+  if (!l) return;
+  const v = prompt(POTS[l.to].app + ' → ' + POTS[l.from].app + ' 갚을 금액 (실제로 옮긴 금액)', String(Math.min(l.left, Math.max(0, st.mc.M.pots[l.to] || 0)) || l.left));
+  const n = Number(String(v || '').replace(/[^0-9]/g, ''));
+  if (n > 0) { A.moneyTransfer(l.to, l.from, String(n), '상환'); render(); }
+}
+function xferSheet(C) {
+  const x = st.xfer, M = C.M;
+  const chips = (k) => '<div class="opts" style="margin:2px 0 10px">' + Object.keys(POTS).map(p => '<button class="' + (x[k] === p ? 'sug' : '') + '" onclick="st.xfer.' + k + '=\'' + p + '\';render()">' + POTS[p].icon + ' ' + POTS[p].app + ' <span class="muted">' + num(M.pots[p]) + '</span></button>').join('') + '</div>';
+  return '<div class="msheet" onclick="if(event.target===this){st.xfer=null;render()}"><div class="in"><b style="font-size:18px">금고끼리 옮기기</b><div class="muted" style="margin-bottom:10px">실제로 돈을 옮긴 그대로 기록해야 앱이랑 계좌가 맞아요.</div>' +
+    '<div class="fld"><label>보내는 금고</label></div>' + chips('from') + '<div class="fld"><label>받는 금고</label></div>' + chips('to') +
+    '<div class="fld"><label>금액 (원)</label><input type="number" inputmode="numeric" value="' + esc(x.amount) + '" oninput="st.xfer.amount=this.value"></div>' +
+    '<div class="row"><button class="btn" style="flex:1" onclick="doXfer(0)">그냥 옮기기</button><button class="btn pri" style="flex:1" onclick="doXfer(1)">빌리기 (갚을 돈)</button></div>' +
+    '<div class="muted" style="font-size:12px;margin-top:8px">빌리기를 고르면 \'' + POTS[x.from].app + '에 갚을 돈\'으로 남아요.</div>' +
+    '<button class="btn" style="width:100%;margin-top:12px" onclick="st.xfer=null;render()">닫기</button></div></div>';
+}
+function doXfer(loan) {
+  const x = st.xfer, n = Number(String(x.amount).replace(/[^0-9]/g, ''));
+  if (x.from === x.to) { alert('보내는 금고와 받는 금고가 같아요'); return; }
+  if (!n) { alert('금액을 넣어 주세요'); return; }
+  if (loan) { const note = prompt('어디에 쓰려고 빌렸나요? (메모)', '') || '빌림'; A.moneyLoan(x.from, x.to, String(n), note); }
+  else A.moneyTransfer(x.from, x.to, String(n), '금고끼리 옮김');
+  st.xfer = null; render();
+}
+/* ----- 주간 잔액 점검 ----- */
+function checkCard(C) {
+  const M = C.M, last = M.lastCheck || '';
+  const since = last ? dayDiff(C.tk, last) : 99;
+  let skip = ''; try { skip = localStorage.getItem('checkSkip') || ''; } catch (e) {}
+  const due = st.checkOpen || (skip !== C.tk && (!last || (since >= 6 && C.today.getDay() === 0) || since >= 10));
+  if (!due) return '';
+  let h = '<div class="card update"><div class="row between"><b>🔍 주간 잔액 점검</b><span class="reward">+2,000 XP</span></div><div class="muted" style="font-size:12px;margin:4px 0 10px">각 앱의 실제 잔액을 넣으면 앱 기록을 맞추고 차이를 알려 줘요. 모르는 칸은 비워 두세요.</div>';
+  for (const p in POTS) h += '<div class="row" style="margin-bottom:8px"><span style="width:118px;flex:none;white-space:nowrap;font-weight:700;font-size:14px">' + POTS[p].icon + ' ' + POTS[p].app + '</span><input type="number" inputmode="numeric" id="ck_' + p + '" placeholder="기록 ' + num(M.pots[p]) + '"></div>';
+  h += '<div class="row"><button class="btn pri" style="flex:1" onclick="doCheck()">점검 완료</button>' + '<button class="btn" onclick="st.checkOpen=false;try{localStorage.setItem(\'checkSkip\',\'' + C.tk + '\')}catch(e){};render()">다음에</button>' + '</div></div>';
+  return h;
+}
+function doCheck() {
+  const M = st.mc.M, lines = [];
+  for (const p in POTS) {
+    const e = document.getElementById('ck_' + p);
+    if (!e || e.value.trim() === '') continue;
+    const n = Number(e.value.replace(/[^0-9]/g, ''));
+    const d = n - (M.pots[p] || 0);
+    lines.push(POTS[p].app + ': ' + (d === 0 ? '딱 맞아요' : (d > 0 ? '+' : '−') + num(Math.abs(d)) + '원 차이 → 맞춤'));
+    if (d !== 0) A.moneyPotSet(p, String(n));
+  }
+  A.moneyCheckDone(); st.checkOpen = false;
+  alert((lines.length ? lines.join('\n') : '입력한 잔액이 없어요') + '\n\n점검 완료! +2,000 XP');
+  render();
+}
 function moneyCal(C) {
   const { M } = C;
   const today = C.today;
@@ -1642,11 +1848,12 @@ function moneyCal(C) {
   let work = 0, off = 0;
   for (let i = 1; i <= days; i++) { if (mIsOff(M, key(new Date(m.getFullYear(), m.getMonth(), i)))) off++; else work++; }
   h += '<div class="card"><div class="datenav" style="margin-top:0"><button onclick="calMove(-1)">◀</button><b>' + m.getFullYear() + '년 ' + (m.getMonth() + 1) + '월</b><button onclick="calMove(1)">▶</button></div>';
+  const monthOcc = billOcc(M, m, new Date(m.getFullYear(), m.getMonth(), days));
   h += '<div class="cal">' + [...WD].map(w => '<div class="w">' + w + '</div>').join('');
   for (let i = 0; i < m.getDay(); i++) h += '<div class="c pad"></div>';
   for (let i = 1; i <= days; i++) {
     const d = new Date(m.getFullYear(), m.getMonth(), i), k = key(d), o = mIsOff(M, k);
-    const bills = M.bills.filter(b => !b.paused && billHits(b, d));
+    const bills = monthOcc.filter(x => x.date === k).map(x => x.b);
     h += '<div class="c' + (o ? ' off' : '') + (k === C.tk ? ' today' : '') + (d < today ? ' past' : '') + '" onclick="toggleOff(\'' + k + '\')"><div class="n">' + i + '</div>' +
       bills.slice(0, 2).map(b => '<div class="b">' + esc(b.name.length > 4 ? b.name.slice(0, 4) : b.name) + '</div>').join('') + (bills.length > 2 ? '<div class="b">+' + (bills.length - 2) + '</div>' : '') + '</div>';
   }
@@ -1678,14 +1885,15 @@ function moneyBills(C) {
   const total = M.bills.filter(b => !b.paused).reduce((a, b) => a + monthly(b), 0);
   h += '<div class="card"><div class="row between"><h2 style="margin:0">고정비 ' + M.bills.length + '개</h2><span class="muted" style="font-size:13px">월 약 <b style="color:var(--ink)">' + num(total) + '원</b></span></div>';
   for (const b of M.bills) {
-    h += '<div class="mrow"><div style="flex:1;min-width:0;' + (b.paused ? 'opacity:.45' : '') + '"><div class="t">' + esc(b.name) + (b.paused ? ' <span class="badge b-na" style="font-size:10px">멈춤</span>' : '') + '</div><div class="s">' + cycleText(b) + (b.cycle === 'week' ? ' · 월 약 ' + num(monthly(b)) + '원' : '') + '</div></div><div class="mamt" style="' + (b.paused ? 'opacity:.45' : '') + '">' + num(b.amount) + '원</div>' +
+    h += '<div class="mrow"><div style="flex:1;min-width:0;' + (b.paused ? 'opacity:.45' : '') + '"><div class="t">' + esc(b.name) + (b.paused ? ' <span class="badge b-na" style="font-size:10px">멈춤</span>' : '') + '</div><div class="s">' + cycleText(b) + (b.cycle === 'week' ? ' · 월 약 ' + num(monthly(b)) + '원' : '') + (b.variable ? ' · 매달 금액 다름' : '') + '</div></div><div class="mamt" style="' + (b.paused ? 'opacity:.45' : '') + '">' + num(b.amount) + '원</div>' +
       '<label class="sw" title="켜기/멈춤"><input type="checkbox" ' + (b.paused ? '' : 'checked') + ' onchange="A.moneyBillPause(\'' + b.id + '\',!this.checked);render()"><span></span></label>' +
-      '<button class="btn" style="padding:8px 10px" onclick="st.billEdit=' + b.id + ';render();setTimeout(()=>document.getElementById(\'bf\').scrollIntoView({behavior:\'smooth\'}),50)">수정</button></div>';
+      '<button class="btn" style="padding:8px 10px" onclick="st.billEdit=' + b.id + ';render();setTimeout(()=>document.getElementById(\'bf\').scrollIntoView({behavior:\'smooth\'}),50)">수정</button>' +
+      (b.paused ? '' : '<button class="btn pri" style="padding:8px 10px" onclick="payNext(' + b.id + ')">납부</button>') + '</div>';
   }
   h += '<div class="muted" style="font-size:12px;margin-top:6px">스위치를 끄면 계산에서 빠져요 (다시 시작할 때 켜면 돼요).</div></div>';
 
   const b = e ? M.bills.find(x => x.id === e) : null;
-  const f = st.billForm = st.billForm && st.billForm._for === (e || 0) ? st.billForm : (b ? { _for: b.id, name: b.name, amount: b.amount, cycle: b.cycle, day: b.day, date: b.date } : { _for: 0, name: '', amount: '', cycle: 'once', day: 1, date: key(addDays(C.today, 7)) });
+  const f = st.billForm = st.billForm && st.billForm._for === (e || 0) ? st.billForm : (b ? { _for: b.id, name: b.name, amount: b.amount, cycle: b.cycle, day: b.day, date: b.date, variable: !!b.variable } : { _for: 0, name: '', amount: '', cycle: 'once', day: 1, date: key(addDays(C.today, 7)), variable: false });
   h += '<div class="card" id="bf"><h2>' + (b ? '고정비 수정' : '+ 나갈 돈 추가') + '</h2>' +
     '<div class="fld"><label>이름</label><input type="text" id="bfName" value="' + esc(f.name) + '" placeholder="예: 친구 축의금, 오토바이 보험" oninput="st.billForm.name=this.value"></div>' +
     '<div class="fld"><label>금액 (원)</label><input type="number" inputmode="numeric" id="bfAmt" value="' + esc(f.amount) + '" oninput="st.billForm.amount=this.value"></div>' +
@@ -1693,8 +1901,9 @@ function moneyBills(C) {
   if (f.cycle === 'once') h += '<div class="fld"><label>날짜</label><input type="date" value="' + esc(f.date || key(C.today)) + '" onchange="st.billForm.date=this.value"></div>';
   else if (f.cycle === 'month') h += '<div class="fld"><label>매월 며칠</label><input type="number" inputmode="numeric" min="1" max="31" value="' + esc(f.day || 1) + '" oninput="st.billForm.day=Number(this.value)"></div>';
   else h += '<div class="fld"><label>무슨 요일</label><div class="wdsel">' + [0, 1, 2, 3, 4, 5, 6].map(d => '<button class="' + (f.day === d ? 'on' : '') + '" onclick="st.billForm.day=' + d + ';render()">' + WD[d] + '</button>').join('') + '</div></div>';
+  if (f.cycle !== 'once') h += '<label class="row" style="gap:8px;font-size:14px;font-weight:700;margin:4px 0 8px"><input type="checkbox" ' + (f.variable ? 'checked' : '') + ' onchange="st.billForm.variable=this.checked"> 매달 금액이 달라요 (관리비처럼)</label>';
   h += '<div class="row" style="margin-top:6px"><button class="btn pri" style="flex:1" onclick="billSave()">' + (b ? '저장' : '추가') + '</button>' + (b ? '<button class="btn" onclick="billDel(' + b.id + ')" style="color:var(--bad)">삭제</button><button class="btn" onclick="st.billEdit=null;st.billForm=null;render()">취소</button>' : '') + '</div>' +
-    '<div class="muted" style="font-size:12px;margin-top:8px">\'한 번\'은 일주일 뒤 몇만 원처럼 잊기 쉬운 돈이에요. 넣어 두면 D-day까지 근무일로 나눠서 목표에 들어가요.</div></div>';
+    '<div class="muted" style="font-size:12px;margin-top:8px">여기서 고치면 <b>앞으로 계속</b> 바뀌어요. 이번 한 번만 다르면 오늘 탭의 다가오는 고정비에서 그 항목을 눌러 주세요.<br>\'한 번\'은 일주일 뒤 몇만 원처럼 잊기 쉬운 돈이에요. 넣어 두면 D-day까지 근무일로 나눠서 목표에 들어가요.</div></div>';
 
   const s = M.settings;
   h += '<div class="sec">기준 금액</div><div class="card list" style="padding-top:4px;padding-bottom:4px">';
@@ -1715,6 +1924,7 @@ function billSave() {
   if (o.cycle === 'month') o.day = Math.min(31, Math.max(1, o.day));
   const cur = st.billEdit ? st.mc.M.bills.find(x => x.id === st.billEdit) : null;
   o.paused = cur ? cur.paused : false;
+  o.variable = o.cycle !== 'once' && !!f.variable;
   A.moneyBillSave(JSON.stringify(o));
   st.billEdit = null; st.billForm = null; render();
 }
@@ -1760,7 +1970,7 @@ function moneyHist(C) {
   }
   if (!logs.length) h += '<div class="empty">아직 없어요</div>';
   h += '</div>';
-  h += '<div class="card list" style="padding-top:4px;padding-bottom:4px">' + item('알림 직접 넣기', '알림을 놓쳤으면 새마을금고 알림 문구를 붙여 넣어 기록해요.', '<button class="btn" onclick="manualIngest()">넣기</button>') + '</div>';
+  h += '<div class="card list" style="padding-top:4px;padding-bottom:4px">' + item('잔액 점검', '금고 4개의 실제 잔액을 넣어 앱 기록과 맞춰요. 일요일마다 자동으로 떠요.', '<button class="btn" onclick="st.checkOpen=true;st.moneyView=\'today\';render();window.scrollTo(0,0)">열기</button>') + item('알림 직접 넣기', '알림을 놓쳤으면 새마을금고 알림 문구를 붙여 넣어 기록해요.', '<button class="btn" onclick="manualIngest()">넣기</button>') + '</div>';
   return h;
 }
 function manualIngest() {
@@ -1810,7 +2020,7 @@ window.refresh = function () {
   if (st.tab === 'cams' || st.tab === 'map' || (st.tab === 'rec' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'dex' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  if (st.tab === 'money' && (st.assign != null || (document.activeElement && document.activeElement.tagName === 'INPUT'))) return;
+  if (st.tab === 'money' && (st.assign != null || st.bill || st.xfer || (document.activeElement && document.activeElement.tagName === 'INPUT'))) return;
   render();
 };
 window.onUpdateInfo = function (info) { st.update = info; if (st.tab === 'home') render(); };
@@ -1842,7 +2052,7 @@ function mockMoney() {
     settings: { living: 20000, workSpend: 20000, offBase: 30000, offBonus: 50000, offWeekdays: [1], saveSteps: [5000, 10000, 15000, 20000, 30000], streakUp: 5 },
     start: key(addDays(workDate(now), -6)),
     bills: [[1, '월세', 400000, 'month', 5], [2, '쿠팡 멤버십', 8000, 'month', 6], [3, '케어원', 60000, 'month', 20], [4, '관리비', 100000, 'month', 25], [5, '운전자보험', 31000, 'month', 26], [6, '유튜브 프리미엄', 14900, 'month', 26], [7, '고고로', 130900, 'week', 4], [8, '핸드폰 요금', 10000, 'week', 5], [9, '마운자로', 430000, 'month', 1, true]].map(b => ({ id: b[0], name: b[1], amount: b[2], cycle: b[3], day: b[4], date: null, paused: !!b[5] })),
-    paid: [], off: {},
+    paid: [], off: {}, overs: [], loans: [], lastCheck: '',
     txs: [
       { id: 3, ts: now - 2 * H, kind: 'out', amount: 5900, balance: 33359, party: '씨유서초청동점', target: 'cat:편의점', status: 'auto' },
       { id: 2, ts: now - 5 * H, kind: 'out', amount: 12000, balance: 39259, party: '카카오페이', target: 'cat:기타', status: 'ask' },
@@ -1855,7 +2065,14 @@ function mockMoney() {
   let lid = 100;
   const addPot = (pot, amount, note, tx) => M.potLog.unshift({ id: ++lid, ts: Date.now(), pot, amount, note, tx: tx == null ? null : tx });
   return {
-    moneyState: () => JSON.stringify(Object.assign({}, M, { pots: pots() })),
+    moneyState: () => { const o = M.loans.length ? Math.min(...M.loans.map(l => l.ts)) : Infinity; return JSON.stringify(Object.assign({}, M, { pots: pots(), inflow: M.potLog.filter(l => l.amount > 0 && l.ts >= o).slice().reverse() })); },
+    moneyBillPay: (id, due, src, a) => { const b = M.bills.find(x => x.id === +id); M.paid.push({ bill: +id, due, ts: Date.now(), tx: null, amount: +a, source: src }); if (src !== 'mg') addPot(src, -a, b.name + ' 납부'); },
+    moneyBillOver: (id, due, a, nd) => { M.overs = M.overs.filter(o => !(o.bill === +id && o.due === due)); M.overs.push({ bill: +id, due, amount: +a, newDue: nd !== due ? nd : null }); },
+    moneyBillOverClear: (id, due) => { M.overs = M.overs.filter(o => !(o.bill === +id && o.due === due)); },
+    moneyTransfer: (f, t, a, n) => { addPot(f, -a, n); addPot(t, +a, n); },
+    moneyLoan: (f, t, a, n) => { M.loans.push({ id: M.loans.length + 1, ts: Date.now(), from: f, to: t, amount: +a, note: n }); addPot(f, -a, '대출 · ' + n); addPot(t, +a, '대출 · ' + n); },
+    moneyLoanDelete: id => { M.loans = M.loans.filter(l => l.id !== +id); },
+    moneyCheckDone: () => { M.lastCheck = key(workDate(Date.now())); },
     moneyListener: () => !window._mmNoListener, moneyOpenListener: () => {},
     moneySettings: j => Object.assign(M.settings, JSON.parse(j)),
     moneyBillSave: j => { const o = JSON.parse(j); if (o.id) Object.assign(M.bills.find(b => b.id === o.id), o); else { o.id = M.bills.length + 1; M.bills.push(o); } return String(o.id); },
