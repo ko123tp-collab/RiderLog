@@ -139,7 +139,7 @@ object Sync {
 
         // 게임 상태 (레벨, 퀘스트, 금고)
         try {
-            if (put(ctx, repo, token, "game.json", JSONObject(Game.stateJson(ctx)).toString(1).toByteArray())) uploaded++
+            if (put(ctx, repo, token, "game.json", JSONObject(Game.stateJson(ctx)).put("rpg", Rpg.stateOrNull(ctx) ?: JSONObject.NULL).toString(1).toByteArray())) uploaded++
         } catch (e: Exception) {
         }
 

@@ -135,6 +135,32 @@
   .quest.done .qbar i { background: var(--ok); }
   .reward { font-size: 11px; font-weight: 800; color: var(--acc); background: var(--accbg); padding: 4px 7px; border-radius: 7px; white-space: nowrap; }
   .quest.done .reward { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  /* 사냥 게임 */
+  .rhead { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+  .rlv { width: 50px; height: 50px; border-radius: 15px; background: linear-gradient(135deg, #FFA041, #FF4F1A); color: #fff; display: grid; place-items: center; font-weight: 900; font-size: 13px; flex: none; }
+  .rcur { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; font-size: 13px; }
+  .rcur div { display: flex; align-items: center; gap: 6px; }
+  .coin { width: 12px; height: 12px; border-radius: 50%; background: #F7C948; box-shadow: inset -2px -2px 0 #C99A2A; display: inline-block; }
+  .gem { width: 11px; height: 11px; background: #4F9DFF; transform: rotate(45deg); box-shadow: inset -2px -2px 0 #2B6FD1; display: inline-block; margin: 0 1px; }
+  .rstage { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+  .rpips { display: flex; gap: 3px; } .rpips i { width: 12px; height: 6px; border-radius: 2px; background: var(--line); } .rpips i.on { background: var(--acc); } .rpips i.cur { background: var(--acc2); } .rpips i.boss { outline: 1px solid var(--bad); }
+  .rscene { position: relative; border-radius: 16px; overflow: hidden; background: #0B0E15; min-height: 260px; }
+  .rscene canvas { display: block; image-rendering: pixelated; }
+  .ridle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; background: rgba(11,14,21,.45); color: #fff; font-size: 14px; line-height: 1.6; }
+  .ridle b { font-size: 18px; }
+  .rtag { position: absolute; left: 8px; bottom: 8px; background: rgba(11,14,21,.82); color: #E8ECF3; font-size: 12px; font-weight: 700; padding: 6px 9px; border-radius: 9px; }
+  .rsnd { position: absolute; right: 8px; bottom: 8px; min-height: 34px; padding: 0 11px; border-radius: 9px; border: 1px solid #FF7A2A; background: rgba(11,14,21,.85); color: #FFC27A; font-weight: 700; font-size: 12px; }
+  .rrow { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .rrow:first-child { border-top: 0; }
+  .rname { font-weight: 800; font-size: 15px; } .rname span { color: var(--acc); font-size: 13px; }
+  .rdesc { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .rbtn { min-width: 78px; min-height: 44px; border-radius: 11px; border: 1px solid var(--line); background: var(--card2); color: var(--faint); font-weight: 800; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+  .rbtn span { font-size: 10px; font-weight: 700; opacity: .8; }
+  .rbtn.can { background: var(--acc); border-color: var(--acc); color: #fff; }
+  .rpgbox { text-align: left !important; }
+  .rgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rgrid div { background: rgba(255,255,255,.07); border-radius: 12px; padding: 10px; font-size: 12px; opacity: .95; }
+  .rgrid b { display: block; font-size: 16px; margin-top: 3px; }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; display: grid; place-items: center; animation: fadein .25s; }
   .modal .box { background: linear-gradient(135deg, #1B2130, #0B0E15); color: #fff; border-radius: 24px; padding: 30px 26px; text-align: center; width: 78%; animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
   .modal .big-lv { font-size: 64px; font-weight: 900; background: linear-gradient(135deg, #FFC27A, #FF4F1A); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1.1; }
@@ -160,6 +186,7 @@
   <button data-tab="period"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 20.5h17"/><rect x="5.5" y="11" width="3" height="6.5" rx="1"/><rect x="10.5" y="5" width="3" height="12.5" rx="1"/><rect x="15.5" y="8.5" width="3" height="9" rx="1"/></svg>기간</button>
   <button data-tab="pay"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="13" rx="3"/><path d="M6.5 3.5h11"/><path d="M15 13h6"/><circle cx="16.5" cy="13" r=".6" fill="currentColor"/></svg>정산</button>
   <button data-tab="stores"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 10v10.5h15V10"/><path d="M3.5 9.2 5.3 3.5h13.4l1.8 5.7a2.6 2.6 0 0 1-4.3 1.9 2.6 2.6 0 0 1-4.2 0 2.6 2.6 0 0 1-4.2 0 2.6 2.6 0 0 1-4.3-1.9Z"/><path d="M10 20.5V16h4v4.5"/></svg>가게</button>
+  <button data-tab="rpg"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 3.5h6v6L10 20l-2-2 .5-.5L5 14l-1.5 1.5L2 14l3-3 3.5 3.5L19 4"/><path d="M15 9l-6 6"/><path d="M4.5 17.5l2 2"/></svg>사냥</button>
 </nav>
 
 <script>
@@ -316,7 +343,7 @@ function gameCard() {
     '<div class="xpbar"><i style="width:' + pctx.toFixed(1) + '%"></i></div><div style="font-size:11px;opacity:.7;margin-top:5px">' + num(g.cur) + ' / ' + num(g.need) + ' XP · 다음 레벨까지 ' + num(g.need - g.cur) + '</div></div></div>' +
     '<div class="chips"><button class="chip" onclick="setTab(\'explore\')"><div class="k">🗺️ 동네 정복</div><div class="v">' + g.explore.visited + '칸</div></button>' +
     '<button class="chip" onclick="setTab(\'dex\')"><div class="k">📖 가게 도감</div><div class="v">' + g.dex + '곳</div></button>' +
-    '<button class="chip" onclick="setTab(\'vault\')"><div class="k">🪙 보상 금고</div><div class="v">' + num(g.vault.pending) + '원</div></button></div></div>';
+    '<button class="chip" onclick="setTab(\'vault\')"><div class="k">🪙 보상 금고</div><div class="v">' + num(g.vault.pending) + '원</div></button></div>' + rpgChip() + '</div>';
   h += '<div class="card"><div class="row between" style="margin-bottom:2px"><h2 style="margin:0">오늘의 퀘스트</h2><span class="muted" style="font-size:12px">완료 시 +3,000원 · +3,000 XP</span></div>';
   for (const q of g.quests) {
     const p = Math.min(1, q.progress / q.target);
@@ -328,6 +355,54 @@ function gameCard() {
   levelUpCheck(g);
   return h;
 }
+function rpgChip() {
+  if (!A.rpgLoad) return '';
+  let raw = ''; try { raw = A.rpgLoad(); } catch (e) {}
+  const sm = raw && window.RPGAPP ? RPGAPP.summary(raw) : null;
+  const txt = sm ? 'STAGE ' + sm.label + ' · ' + sm.biome : (raw ? '사냥 이어 하기' : '사냥 시작하기');
+  return '<button class="chip" style="width:100%;margin-top:8px;position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center" onclick="setTab(\'rpg\')"><div><div class="k">⚔️ 사냥터</div><div class="v">' + esc(txt) + '</div></div><div style="font-size:20px;opacity:.7">›</div></button>';
+}
+/* ================= 사냥 게임 ================= */
+const RPG_BASE = (location.protocol.indexOf('http') === 0 ? '' : 'https://ko123tp-collab.github.io') + '/__rpg/';
+function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error(src)); document.head.appendChild(s); }); }
+async function loadRpgCode() {
+  if (!window.RPG) await loadScript(RPG_BASE + 'core.js');
+  if (!window.RPGAPP) await loadScript(RPG_BASE + 'engine.js');
+}
+async function loadRpgArt() {
+  if (typeof SPR === 'undefined') await loadScript(RPG_BASE + 'sprites.js');
+  if (typeof BGS === 'undefined') await loadScript(RPG_BASE + 'bgs.js');
+}
+function renderRpg() {
+  setTimeout(mountRpg, 0);
+  return '<div id="rpgRoot"><div class="card"><div class="muted">사냥터 불러오는 중…</div></div></div>';
+}
+async function mountRpg() {
+  const el = document.getElementById('rpgRoot'); if (!el || st.tab !== 'rpg') return;
+  let a = { ok: false, sync: false };
+  try { a = JSON.parse(A.rpgAssets()); } catch (e) {}
+  if (!a.ok) { el.innerHTML = rpgDownloadCard(a); return; }
+  try { await loadRpgCode(); await loadRpgArt(); }
+  catch (e) { el.innerHTML = '<div class="card warn">게임 파일을 여는 중 문제가 생겼어요: ' + esc(e.message) + '</div>' + rpgDownloadCard(a); return; }
+  if (st.tab !== 'rpg' || !document.getElementById('rpgRoot')) return;
+  RPGAPP.mount(el);
+}
+function rpgDownloadCard(a) {
+  return '<div class="card"><h2>사냥터 준비</h2><div style="font-size:14px;line-height:1.6">캐릭터·배경·소리 파일(약 2.7MB)을 한 번만 받으면 돼요. 유료 에셋이라 공개 앱 파일에는 넣지 않고, 연결해 둔 비공개 기록 저장소에서 받아 와요.</div>' +
+    (a.sync ? '<button class="btn pri" id="rpgDl" style="width:100%;margin-top:14px" onclick="rpgDownload()">게임 파일 받기</button>' :
+      '<div class="warn" style="margin-top:12px;font-size:13px">설정 → 기록 자동 업로드를 먼저 연결해 주세요.</div><button class="btn" style="width:100%;margin-top:10px" onclick="setTab(\'settings\')">설정으로 가기</button>') +
+    '<div class="muted" id="rpgDlMsg" style="font-size:12px;margin-top:10px"></div></div>';
+}
+function rpgDownload() {
+  const b = document.getElementById('rpgDl'); if (b) { b.disabled = true; b.textContent = '받는 중…'; }
+  A.rpgDownload();
+}
+window.onRpgAssets = function (r) {
+  if (r.ok) { if (st.tab === 'rpg') render(); return; }
+  const b = document.getElementById('rpgDl'); if (b) { b.disabled = false; b.textContent = '다시 받기'; }
+  const m = document.getElementById('rpgDlMsg'); if (m) m.textContent = r.err || '받지 못했어요';
+};
+window.onAppPause = function () { if (window.RPGAPP && st.tab === 'rpg') RPGAPP.pause(); };
 function levelUpCheck(g) {
   let seen = Number(localStorage.getItem('lvSeen') || 0);
   if (!seen) { localStorage.setItem('lvSeen', g.level); return; }
@@ -924,7 +999,7 @@ function renameStore(id) {
 }
 
 /* ================= 공통 ================= */
-function setTab(t) { if (t !== 'day') st.trip = null; if (t === 'home') st.game = null; st.tab = t; render(); window.scrollTo(0, 0); }
+function setTab(t) { if (st.tab === 'rpg' && t !== 'rpg' && window.RPGAPP) RPGAPP.unmount(); if (t !== 'day') st.trip = null; if (t === 'home') st.game = null; st.tab = t; render(); window.scrollTo(0, 0); }
 function render() {
   applyThemeClass();
   const running = A.isRunning();
@@ -933,7 +1008,7 @@ function render() {
   pill.innerHTML = '<span class="dot"></span>' + (running ? '운행 중' : '대기');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
   document.getElementById('setbtn').classList.toggle('on', st.tab === 'settings' || st.tab === 'cams');
-  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings, cams: renderCams, explore: renderExplore, dex: renderDex, vault: renderVault }[st.tab];
+  const fn = { home: renderHome, day: renderDay, period: renderPeriod, pay: renderPay, stores: renderStores, settings: renderSettings, cams: renderCams, explore: renderExplore, dex: renderDex, vault: renderVault, rpg: renderRpg }[st.tab];
   try {
     document.getElementById('view').innerHTML = fn();
   } catch (e) {
@@ -941,6 +1016,7 @@ function render() {
   }
 }
 window.refresh = function () {
+  if (st.tab === 'rpg') { if (window.RPGAPP && document.getElementById('rpgCv')) RPGAPP.resume(); else render(); return; }
   if (st.tab === 'cams' || st.tab === 'explore' || (st.tab === 'day' && st.trip != null)) return;
   if (st.tab === 'settings' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (st.tab === 'stores' && document.activeElement && document.activeElement.tagName === 'INPUT') return;
@@ -948,6 +1024,7 @@ window.refresh = function () {
 };
 window.onUpdateInfo = function (info) { st.update = info; if (st.tab === 'home') render(); };
 if (A.checkUpdate) A.checkUpdate();
+if (A.rpgLoad) loadRpgCode().then(() => { if (st.tab === 'home') render(); }).catch(() => {});
 document.getElementById('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
 setInterval(() => { if (st.tab === 'home') render(); }, 30000);
 render();
@@ -1001,6 +1078,8 @@ function makeMock() {
     exportAll: () => alert('미리보기에서는 내보내기가 없어요'),
     openBatterySettings: () => alert('미리보기'),
     captureStatus: () => JSON.stringify({ enabled: true, on: true, count: 1284, bytes: 3456789, apps: [{ pkg: 'com.woowahan.bros', label: '배민커넥트', on: true }] }),
+    rpgLoad: () => localStorage.getItem('mockRpg') || '', rpgSave: j => localStorage.setItem('mockRpg', j), rpgAssets: () => JSON.stringify({ ok: true, sync: true }), rpgDownload: () => {},
+    rpgInputs: since => { const t = Date.now(); const ds = events.filter(e => e.type === 'DELIVER' && e.amount); const xp = ds.reduce((a, e) => a + e.amount, 0); return JSON.stringify({ shifts: shifts.filter(x => !x.end || x.end > +since).map(x => [x.start, x.end]), xpBefore: ds.filter(e => e.ts < +since).reduce((a, e) => a + e.amount, 0), xpEvents: ds.filter(e => e.ts >= +since).map(e => [e.ts, e.amount]), bp: Math.floor(xp / 100), xp: xp, running: !shifts[shifts.length - 1].end, now: t }); },
     version: () => '3', getGame: () => JSON.stringify({ xp: 512340, level: 10, cur: 44340, need: 92000, title: '골목대장', quests: [{ title: '처음 가 보는 가게 3곳 방문', progress: 1, target: 3, done: false, kind: 'NEW_STORES' }, { title: '저녁 피크(18~21시)에 6건 완료', progress: 6, target: 6, done: true, kind: 'PEAK' }, { title: '오늘의 탐방: 방배동 들르기', progress: 0, target: 1, done: false, kind: 'AREA' }], vault: { total: 15000, paid: 6000, pending: 9000 }, questsDone: 5, monthDone: 5, tickets: [{ id: 1, ts: Date.now(), source: '레벨 10 달성', used: null }], explore: { visited: 214, total: 1428, today: 6 }, dex: 37 }), getCells: () => JSON.stringify({ lat0: 37.445, lng0: 126.975, dlat: 0.002695, dlng: 0.003396, rows: 34, cols: 42, cells: [[10, 12, 0], [10, 13, 1]] }), getDex: () => JSON.stringify([{ id: 1, name: '양재동김밥', visits: 12, first: Date.now() - 9e8, last: Date.now() }, { id: 2, name: '교촌치킨 역삼점', visits: 4, first: Date.now() - 5e8, last: Date.now() }, { id: 3, name: '본죽 도곡점', visits: 1, first: Date.now(), last: Date.now() }]), vaultWithdraw: () => {}, useTicket: () => {}, getSync: () => JSON.stringify({ repo: 'ko123tp-collab/riderlog-data', hasToken: true, last: Date.now(), status: '3개 파일 업로드', ok: true }), setSync: () => {}, syncNow: () => {}, getCameras: () => JSON.stringify(window._cams || (window._cams = [{ id: 1, name: '강남대로 양재역 남쪽', lat: 37.48, lng: 127.0357, speed: 50, confirmed: false }, { id: 2, name: '반포역', lat: 37.508, lng: 127.0104, speed: 50, confirmed: true }])), getCamAlert: () => true, setCamAlert: () => {}, testVoice: () => {}, testChime: () => {}, lastLocation: () => '', updateCamera: (id, j) => { const c = window._cams.find(x => x.id === +id); Object.assign(c, JSON.parse(j)); }, addCamera: () => '3', deleteCamera: () => {}, getTheme: () => (window._mt || 'system'), setTheme: m => { window._mt = m; }, systemDark: () => false, getOverlay: () => false, setOverlay: () => {}, checkUpdate: () => setTimeout(() => window.onUpdateInfo({ current: 3, latest: 4, available: true }), 50), installUpdate: () => {},
     setCaptureOn: () => {}, setCaptureApp: () => {}, openAccessibilitySettings: () => {}, openAppInfo: () => {}, exportCapture: () => {}, clearCapture: () => {}
   };

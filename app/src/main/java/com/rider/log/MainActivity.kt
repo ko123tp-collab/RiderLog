@@ -53,7 +53,14 @@ class MainActivity : Activity() {
         Thread { try { db.purgeDropAddresses() } catch (e: Exception) {} }.start()
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
-        web.webViewClient = WebViewClient()
+        web.webViewClient = object : WebViewClient() {
+            // 게임 파일(/__rpg/...)은 폰에 저장된 파일로 응답
+            override fun shouldInterceptRequest(view: WebView?, request: android.webkit.WebResourceRequest?): android.webkit.WebResourceResponse? {
+                val u = request?.url ?: return null
+                if (u.host == "ko123tp-collab.github.io" && (u.path ?: "").startsWith("/__rpg/")) return Rpg.intercept(this@MainActivity, u.path ?: "")
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
         web.webChromeClient = WebChromeClient()
         web.addJavascriptInterface(Bridge(), "Android")
         setContentView(web)
@@ -220,6 +227,12 @@ class MainActivity : Activity() {
         refreshWeb()
     }
 
+    override fun onPause() {
+        // 게임 화면이 열려 있으면 저장하고 멈춤 (소리도 끔)
+        if (::web.isInitialized) web.evaluateJavascript("window.onAppPause && window.onAppPause()", null)
+        super.onPause()
+    }
+
     private fun refreshWeb() {
         if (::web.isInitialized) web.evaluateJavascript("window.refresh && window.refresh()", null)
     }
@@ -375,6 +388,24 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun getGame(): String = Game.stateJson(this@MainActivity)
+
+        // ----- 사냥 게임 -----
+        @JavascriptInterface
+        fun rpgLoad(): String = Rpg.load(this@MainActivity)
+
+        @JavascriptInterface
+        fun rpgSave(json: String) = Rpg.save(this@MainActivity, json)
+
+        @JavascriptInterface
+        fun rpgInputs(since: String): String = Rpg.inputsJson(this@MainActivity, since.toLongOrNull() ?: System.currentTimeMillis())
+
+        @JavascriptInterface
+        fun rpgAssets(): String = Rpg.assetsJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun rpgDownload() {
+            Thread { sendToWeb("onRpgAssets", Rpg.download(this@MainActivity)) }.start()
+        }
 
         @JavascriptInterface
         fun getCells(): String = Game.cellsJson(this@MainActivity)
